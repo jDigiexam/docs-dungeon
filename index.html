@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>8-Bit Office Mystery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+        /* Hide scrollbars */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    </style>
+</head>
+<body class="bg-gray-900 text-white overflow-hidden h-screen flex items-center justify-center">
+
+    <!-- Main Game Container -->
+    <div id="game-container" class="relative w-full h-full max-w-5xl max-h-[90vh] md:max-h-full aspect-video bg-black shadow-lg rounded-lg overflow-hidden">
+        
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="absolute inset-0 bg-gray-900/80 z-50 flex flex-col items-center justify-center">
+            <h1 class="text-4xl mb-4">Office Mystery</h1>
+            <p id="loading-text">Connecting...</p>
+        </div>
+
+        <!-- Lobby Screen (Initially hidden) -->
+        <div id="lobby-screen" class="hidden absolute inset-0 bg-gray-800 z-40 p-8 flex flex-col items-center justify-center text-center">
+            <h2 class="text-3xl mb-6">Game Lobby</h2>
+            <input id="username-input" type="text" placeholder="Enter Your Name" class="bg-gray-700 border-2 border-gray-500 rounded-md p-3 text-lg mb-4 w-full max-w-sm text-center">
+            <button id="join-game-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-md text-xl">Join Game</button>
+        </div>
+        
+        <!-- Game Screen -->
+        <div id="game-screen" class="relative w-full h-full">
+            <canvas id="game-canvas" class="w-full h-full"></canvas>
+
+            <!-- UI Overlay -->
+            <div class="absolute top-0 left-0 p-4">
+                <div id="status-text" class="text-lg bg-black/50 p-2 rounded">Status: Alive</div>
+            </div>
+
+            <!-- Chat & Video Area -->
+            <div class="absolute bottom-0 left-0 p-4 w-full md:w-1/3 max-w-md">
+                <!-- Video Streams -->
+                <div class="flex space-x-2 mb-2">
+                    <video id="local-video" autoplay muted playsinline class="w-1/2 bg-gray-700 rounded-md border-2 border-green-500"></video>
+                    <div id="remote-videos" class="w-1/2 bg-gray-700 rounded-md flex items-center justify-center text-sm">Teammate</div>
+                </div>
+                <!-- Chat Box -->
+                <div id="chat-box" class="h-24 bg-black/60 rounded-md p-2 overflow-y-auto text-sm mb-2">
+                    <div id="chat-messages"></div>
+                </div>
+                <input id="chat-input" type="text" placeholder="Type a message..." class="w-full bg-gray-700 border-2 border-gray-500 rounded-md p-2 text-sm">
+            </div>
+
+            <!-- Virtual Joystick for Mobile -->
+            <div id="joystick-container" class="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-gray-500/30 flex items-center justify-center select-none md:hidden">
+                <div id="joystick-thumb" class="w-16 h-16 rounded-full bg-gray-400/50"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supabase and Game Logic -->
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+        // --- 1. CONFIGURATION ---
+        const SUPABASE_URL = ''; // IMPORTANT: Add your Supabase Project URL here
+        const SUPABASE_ANON_KEY = ''; // IMPORTANT: Add your Supabase Anon Key here
+
+        // --- 2. SUPABASE & REALTIME SETUP ---
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+            const loadingText = document.getElementById('loading-text');
+            loadingText.innerText = "Supabase credentials not set!\nPlease update the script block in index.html.";
+            loadingText.style.color = 'red';
+        }
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const GAME_CHANNEL = 'office-mystery-game';
+        const channel = supabase.channel(GAME_CHANNEL, {
+            config: {
+                broadcast: {
+                    self: true, 
+                },
+            },
+        });
+
+
+        // --- 3. DOM ELEMENTS & GAME STATE ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const loadingScreen = document.getElementById('loading-screen');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const joinGameBtn = document.getElementById('join-game-btn');
+        const usernameInput = document.getElementById('username-input');
+
+        const gameState = {
+            players: {}, // Store all player data { id, x, y, name, isAlive, ... }
+            clues: [],
+            monsterId: null,
+        };
+
+        let myPlayerId = Math.random().toString(36).substring(7); // Simple unique ID for now
+
+        // --- 4. PLAYER MOVEMENT & CONTROLS ---
+        const keys = { w: false, a: false, s: false, d: false };
+        const playerSpeed = 3;
+        const joystick = {
+            active: false,
+            x: 0,
+            y: 0,
+            dx: 0,
+            dy: 0,
+            radius: document.getElementById('joystick-container').offsetWidth / 2,
+        };
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+        // Joystick Controls
+        const joystickContainer = document.getElementById('joystick-container');
+        const joystickThumb = document.getElementById('joystick-thumb');
+
+        joystickContainer.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            joystick.active = true;
+        });
+        joystickContainer.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!joystick.active) return;
+            const touch = e.touches[0];
+            const rect = joystickContainer.getBoundingClientRect();
+            joystick.x = touch.clientX - rect.left - joystick.radius;
+            joystick.y = touch.clientY - rect.top - joystick.radius;
+            
+            const mag = Math.sqrt(joystick.x**2 + joystick.y**2);
+            if (mag > joystick.radius) {
+                joystick.x = (joystick.x / mag) * joystick.radius;
+                joystick.y = (joystick.y / mag) * joystick.radius;
+            }
+
+            joystick.dx = joystick.x / joystick.radius;
+            joystick.dy = joystick.y / joystick.radius;
+
+            joystickThumb.style.transform = `translate(${joystick.x}px, ${joystick.y}px)`;
+        });
+        joystickContainer.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            joystick.active = false;
+            joystick.dx = 0;
+            joystick.dy = 0;
+            joystickThumb.style.transform = `translate(0px, 0px)`;
+        });
+
+        function updateMyPlayerPosition() {
+            if (!gameState.players[myPlayerId]) return;
+
+            let dx = 0;
+            let dy = 0;
+
+            // Keyboard input
+            if (keys.w) dy -= 1;
+            if (keys.s) dy += 1;
+            if (keys.a) dx -= 1;
+            if (keys.d) dx += 1;
+            
+            // Joystick input overrides keyboard
+            if (joystick.active) {
+                dx = joystick.dx;
+                dy = joystick.dy;
+            }
+            
+            const mag = Math.sqrt(dx**2 + dy**2);
+            if(mag > 0) {
+                 const normalizedDx = dx / mag;
+                 const normalizedDy = dy / mag;
+                 gameState.players[myPlayerId].x += normalizedDx * playerSpeed;
+                 gameState.players[myPlayerId].y += normalizedDy * playerSpeed;
+            }
+
+            // Clamp position to canvas bounds
+            gameState.players[myPlayerId].x = Math.max(10, Math.min(canvas.width - 10, gameState.players[myPlayerId].x));
+            gameState.players[myPlayerId].y = Math.max(10, Math.min(canvas.height - 10, gameState.players[myPlayerId].y));
+        }
+
+        // --- 5. GAME LOOP ---
+        function draw() {
+            // Resize canvas to fit container
+            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw a simple grid background
+            ctx.strokeStyle = '#374151';
+            for (let i = 0; i < canvas.width; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Draw all players
+            for (const id in gameState.players) {
+                const player = gameState.players[id];
+                ctx.fillStyle = id === myPlayerId ? 'cyan' : 'red';
+                if (!player.isAlive) {
+                    ctx.fillStyle = 'gray';
+                }
+                ctx.fillRect(player.x - 10, player.y - 10, 20, 20); // Simple square for player
+                
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.fillText(player.name, player.x, player.y - 15);
+            }
+        }
+
+        function update() {
+            if (gameState.players[myPlayerId] && gameState.players[myPlayerId].isAlive) {
+                updateMyPlayerPosition();
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- 6. REALTIME COMMUNICATION ---
+        async function broadcastMyState() {
+             if (!gameState.players[myPlayerId]) return;
+             await channel.send({
+                 type: 'broadcast',
+                 event: 'player-update',
+                 payload: {
+                     id: myPlayerId,
+                     data: gameState.players[myPlayerId]
+                 },
+             });
+        }
+
+        channel
+            .on('broadcast', { event: 'player-update' }, ({ payload }) => {
+                 // Don't update your own player from broadcast
+                 if(payload.id === myPlayerId) return;
+
+                 if (!gameState.players[payload.id]) {
+                     console.log(`Player ${payload.data.name} joined!`);
+                 }
+                 gameState.players[payload.id] = payload.data;
+            })
+            .on('broadcast', { event: 'player-leave' }, ({ payload }) => {
+                 console.log(`Player ${gameState.players[payload.id]?.name} left.`);
+                 delete gameState.players[payload.id];
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Connected to game channel!');
+                    document.getElementById('loading-text').innerText = "Connected! Waiting for lobby...";
+                    loadingScreen.classList.add('hidden');
+                    lobbyScreen.classList.remove('hidden');
+                }
+            });
+            
+        // --- 7. INITIALIZATION ---
+        function init() {
+            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+            
+            joinGameBtn.onclick = () => {
+                const username = usernameInput.value.trim();
+                if (username.length < 3) {
+                    alert('Please enter a name (at least 3 characters).');
+                    return;
+                }
+
+                // Create my player object
+                gameState.players[myPlayerId] = {
+                    name: username,
+                    x: Math.random() * 500 + 50,
+                    y: Math.random() * 300 + 50,
+                    isAlive: true
+                };
+
+                lobbyScreen.classList.add('hidden');
+
+                // Start game loop and broadcasting
+                gameLoop();
+                setInterval(broadcastMyState, 1000 / 30); // Broadcast state 30 times per second
+            };
+            
+            // Handle player leaving
+            window.addEventListener('beforeunload', async () => {
+                await channel.send({
+                     type: 'broadcast',
+                     event: 'player-leave',
+                     payload: { id: myPlayerId },
+                });
+                supabase.removeChannel(channel);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
