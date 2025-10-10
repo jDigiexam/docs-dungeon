@@ -127,6 +127,7 @@
         const lobbyScreen = document.getElementById('lobby-screen');
         const joinGameBtn = document.getElementById('join-game-btn');
         const usernameInput = document.getElementById('username-input');
+        const chatInput = document.getElementById('chat-input');
 
         const gameState = {
             players: {},
@@ -196,11 +197,20 @@
 
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
-        const keys = { w: false, a: false, s: false, d: false };
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         const playerSpeed = 3;
         const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: document.getElementById('joystick-container').offsetWidth / 2 };
-        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+        window.addEventListener('keydown', (e) => {
+            if (document.activeElement !== chatInput && keys.hasOwnProperty(e.key)) {
+                e.preventDefault(); // Prevent scrolling the page with arrow keys
+                keys[e.key] = true;
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = false;
+            }
+        });
         const joystickContainer = document.getElementById('joystick-container');
         const joystickThumb = document.getElementById('joystick-thumb');
         joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; });
@@ -216,8 +226,8 @@
 
         function updateMyPlayerPosition() {
             if (!gameState.players[myPlayerId]) return;
-            let dx = joystick.active ? joystick.dx : (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
-            let dy = joystick.active ? joystick.dy : (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+            let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+            let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
             if (mag > 0) {
                 gameState.players[myPlayerId].x += (dx / mag) * playerSpeed;
@@ -359,4 +369,7 @@
     </script>
 </body>
 </html>
+
+
+
 
