@@ -133,11 +133,14 @@
         let myPlayerId = null;
         let gameChannel = null;
         
-        // Maze and Clue Constants
+        // Game Constants
         const MAZE_WIDTH = 25;
         const MAZE_HEIGHT = 20;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 5;
+        const PLAYER_SPEED = 2;
+        const MONSTER_SPEED = 2.2;
+        const SIGHT_RADIUS = 5; // In grid cells
         let CELL_SIZE = 32;
 
         // WebRTC State
@@ -206,8 +209,9 @@
                 color: `hsl(${Math.random() * 360}, 80%, 70%)`,
                 teamId: myPlayerId,
                 status: 'alive',
-                isMonster: false, // Will be assigned via presence
-                hasWeapon: false
+                isMonster: false,
+                hasWeapon: false,
+                speed: PLAYER_SPEED,
             };
 
             await setupSupabaseChannels();
@@ -236,6 +240,25 @@
             drawClues();
             drawWeapon();
             Object.values(gameState.players).forEach(drawPlayer);
+            
+            drawFogOfWar();
+        }
+        
+        function drawFogOfWar() {
+            const me = gameState.players[myPlayerId];
+            if (!me || (!me.isMonster && !me.hasWeapon)) return;
+
+            ctx.save();
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.globalCompositeOperation = 'destination-out';
+            
+            ctx.beginPath();
+            ctx.arc(me.x, me.y, SIGHT_RADIUS * CELL_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore(); // Resets globalCompositeOperation to 'source-over'
         }
 
         function drawPlayer(player) {
@@ -332,6 +355,12 @@
 
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => { if (payload.id && payload.id !== myPlayerId) gameState.players[payload.id] = payload; })
+                .on('broadcast', { event: 'assign_monster' }, ({ payload }) => {
+                    if (gameState.players[payload.playerId]) {
+                        gameState.players[payload.playerId].isMonster = true;
+                        gameState.players[payload.playerId].speed = MONSTER_SPEED;
+                    }
+                })
                 .on('broadcast', { event: 'clue_update' }, ({ payload }) => {
                     const clue = gameState.clues.find(c => c.id === payload.clueId);
                     if (clue && !clue.collectedByTeams.includes(payload.teamId)) {
@@ -354,6 +383,7 @@
                     }
                 })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
+                    const me = gameState.players[myPlayerId];
                     if (gameState.players[payload.playerId]) {
                         gameState.players[payload.playerId].status = 'dead';
                         if (payload.playerId === myPlayerId) {
@@ -363,26 +393,39 @@
                             gameOverScreen.style.display = 'flex';
                         }
                     }
+                    // Monster checks for win condition
+                    if (me && me.isMonster) {
+                        const hunters = Object.values(gameState.players).filter(p => !p.isMonster && !p.hasWeapon);
+                        if (hunters.length > 0 && hunters.every(p => p.status === 'dead')) {
+                            broadcastMonsterWins();
+                        }
+                    }
                 })
                 .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
                     gameOverText.textContent = 'Hunters Win!';
                     gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
                     gameOverScreen.style.display = 'flex';
-                    // End game for everyone
+                    if (gameChannel) gameChannel.unsubscribe();
+                })
+                .on('broadcast', { event: 'monster_wins' }, () => {
+                    gameOverText.textContent = 'Monster Wins!';
+                    gameOverSubtext.textContent = `All hunters have been eliminated.`;
+                    gameOverScreen.style.display = 'flex';
                     if (gameChannel) gameChannel.unsubscribe();
                 })
                 .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
-                    const playersInRoom = Object.keys(presenceState);
+                    const presences = Object.keys(presenceState);
+                    presences.sort(); // For deterministic host selection
                     
-                    // Simple monster assignment: second player is the monster (for testing)
-                    // A real implementation would be more robust (e.g., on game start)
-                    if (playersInRoom.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
-                        const monsterId = playersInRoom[1]; // Get the key of the second user
-                        if(gameState.players[monsterId]) {
-                           gameState.players[monsterId].isMonster = true;
+                    if (presences.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
+                        const hostId = presences[0].split('_')[1]; // Extract timestamp from player_id
+                        if (myPlayerId.split('_')[1] === hostId) {
+                            const monsterPresenceKey = presences[1];
+                            const monsterId = presenceState[monsterPresenceKey][0].player_id;
+                            broadcastAssignMonster(monsterId);
                         }
                     }
 
@@ -420,16 +463,18 @@
         function broadcastWeaponCollect(playerId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_collect', payload: { playerId, teamId } }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
+        function broadcastAssignMonster(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'assign_monster', payload: { playerId } }); }
+        function broadcastMonsterWins() { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_wins', payload: {} }); }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-        const playerSpeed = 2;
         const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: document.getElementById('joystick-container').offsetWidth / 2 };
         
         window.addEventListener('keydown', (e) => { if (document.activeElement !== chatInput && keys.hasOwnProperty(e.key)) { e.preventDefault(); keys[e.key] = true; } });
         window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
         const joystickContainer = document.getElementById('joystick-container');
+        const joystickThumb = document.getElementById('joystick-thumb');
         joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; });
         joystickContainer.addEventListener('touchmove', (e) => {
             if (!joystick.active) return;
@@ -453,8 +498,8 @@
             const mag = Math.sqrt(dx**2 + dy**2);
             
             if (mag > 0) {
-                const normalizedDx = (dx / mag) * playerSpeed;
-                const normalizedDy = (dy / mag) * playerSpeed;
+                const normalizedDx = (dx / mag) * player.speed;
+                const normalizedDy = (dy / mag) * player.speed;
                 let nextX = player.x + normalizedDx;
                 let nextY = player.y + normalizedDy;
                 const playerRadius = 4;
