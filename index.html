@@ -2,41 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>8-Bit Office Mystery</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
-        body {
-            font-family: 'Press Start 2P', cursive;
-            overscroll-behavior: none;
-            touch-action: none;
-        }
-        /* Hide scrollbars */
-        ::-webkit-scrollbar {
-            display: none;
-        }
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
-
-        #remote-videos-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
+        body { font-family: 'Courier New', Courier, monospace; }
+        #game-canvas { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
+        /* Simple focus styles for accessibility and clarity */
+        input:focus, button:focus { outline: 2px solid #4f46e5; outline-offset: 2px; }
     </style>
 </head>
 <body class="bg-gray-900 text-white overflow-hidden h-screen flex flex-col md:flex-row items-stretch">
 
     <!-- UI Panel (Left Side on Desktop, Bottom on Mobile) -->
     <div id="ui-panel" class="w-full md:w-72 lg:w-96 bg-gray-800 p-4 flex flex-col space-y-2 overflow-y-auto order-last md:order-first h-1/3 md:h-full">
-        <!-- Status -->
-        <div id="status-text" class="text-lg bg-gray-900/50 p-2 rounded">Status: Alive</div>
+        <!-- Status & Clues -->
+        <div class="bg-gray-900/50 p-2 rounded">
+            <div id="status-text" class="text-lg">Status: Alive</div>
+            <div id="clues-text" class="text-lg">Clues Found: 0/5</div>
+        </div>
         
         <!-- Video Streams -->
         <div class="flex space-x-2">
@@ -84,18 +69,22 @@
     <div id="game-container" class="relative flex-grow bg-black shadow-lg rounded-lg overflow-hidden">
         
         <!-- Loading Screen -->
-        <div id="loading-screen" class="absolute inset-0 bg-gray-900/80 z-50 flex flex-col items-center justify-center">
-            <h1 class="text-4xl mb-4">Office Mystery</h1>
-            <p id="loading-text">Connecting...</p>
+        <div id="loading-screen" class="absolute inset-0 bg-gray-900 flex items-center justify-center z-30">
+            <div class="text-center">
+                <h1 class="text-4xl font-bold mb-4">8-Bit Office Mystery</h1>
+                <p>Loading...</p>
+            </div>
         </div>
 
-        <!-- Lobby Screen (Initially hidden) -->
-        <div id="lobby-screen" class="hidden absolute inset-0 bg-gray-800 z-40 p-8 flex flex-col items-center justify-center text-center">
-            <h2 class="text-3xl mb-6">Game Lobby</h2>
-            <input id="username-input" type="text" placeholder="Enter Your Name" class="bg-gray-700 border-2 border-gray-500 rounded-md p-3 text-lg mb-4 w-full max-w-sm text-center">
-            <button id="join-game-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-md text-xl">Join Game</button>
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-20 hidden">
+            <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl">
+                <h2 class="text-2xl mb-4">Enter the Game</h2>
+                <input id="username-input" type="text" placeholder="Enter your name" class="text-black p-2 rounded w-full mb-4">
+                <button id="join-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded w-full">Join Game</button>
+            </div>
         </div>
-        
+
         <!-- Game Screen -->
         <div id="game-screen" class="relative w-full h-full">
             <canvas id="game-canvas" class="w-full h-full"></canvas>
@@ -107,20 +96,13 @@
         </div>
     </div>
 
-    <!-- Supabase and Game Logic -->
     <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-        // --- 1. CONFIGURATION ---
+        // --- 0. SUPABASE & GENERAL SETUP ---
         const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // --- 2. SUPABASE & REALTIME SETUP ---
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const GAME_CHANNEL = 'office-mystery-game';
-        const channel = supabase.channel(GAME_CHANNEL, { config: { broadcast: { self: true } } });
-
-        // --- 3. DOM ELEMENTS & GAME STATE ---
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         const loadingScreen = document.getElementById('loading-screen');
@@ -128,81 +110,223 @@
         const joinGameBtn = document.getElementById('join-game-btn');
         const usernameInput = document.getElementById('username-input');
         const chatInput = document.getElementById('chat-input');
+        const cluesText = document.getElementById('clues-text');
 
         const gameState = {
             players: {},
-            clues: [],
-            monsterId: null,
+            maze: [],
+            clues: []
         };
-        let myPlayerId = Math.random().toString(36).substring(7);
+        let myPlayerId = null;
+        let gameChannel = null;
+        
+        // Maze and Clue Constants
+        const MAZE_WIDTH = 25; // In cells
+        const MAZE_HEIGHT = 20; // In cells
+        const NUM_CLUES = 5;
+        const MIN_CLUE_DISTANCE = 5; // Min grid cells between clues
 
-        // --- 4. WEBRTC & MEDIA ---
-        const localVideo = document.getElementById('local-video');
-        const remoteVideosContainer = document.getElementById('remote-videos-container');
-        const remoteVideoPlaceholder = document.getElementById('remote-video-placeholder');
-        const toggleMicBtn = document.getElementById('toggle-mic-btn');
-        const toggleCamBtn = document.getElementById('toggle-cam-btn');
-        const micOnIcon = document.getElementById('mic-on-icon');
-        const micOffIcon = document.getElementById('mic-off-icon');
-        const camOnIcon = document.getElementById('cam-on-icon');
-        const camOffIcon = document.getElementById('cam-off-icon');
+        let CELL_SIZE = 32; // This will be calculated dynamically
 
-        let localStream = null;
-        let peerConnections = {};
-        let isMicOn = false;
-        let isCamOn = false;
-        const STUN_SERVER = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        // --- 1. INITIALIZATION ---
+        window.onload = () => {
+            initGame();
+        };
 
-        async function startMedia() {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = localStream;
-                // Start with media off
-                localStream.getAudioTracks()[0].enabled = isMicOn;
-                localStream.getVideoTracks()[0].enabled = isCamOn;
-                updateMediaButtonsUI();
-            } catch (error) {
-                console.error("Error accessing media devices.", error);
-                alert("Could not access camera and microphone. Please allow permissions and try again.");
+        window.onresize = () => {
+             resizeCanvas();
+        };
+
+        function initGame() {
+            resizeCanvas();
+            loadingScreen.style.display = 'none';
+            lobbyScreen.style.display = 'flex';
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            CELL_SIZE = Math.min(canvas.width / MAZE_WIDTH, canvas.height / MAZE_HEIGHT);
+            drawGame(); 
+        }
+
+        joinGameBtn.addEventListener('click', () => {
+            const username = usernameInput.value.trim() || `Player_${Math.floor(Math.random() * 1000)}`;
+            myPlayerId = `player_${Date.now()}`;
+            joinGame(username);
+        });
+
+
+        // --- 2. GAME LOGIC ---
+
+        function joinGame(username) {
+            lobbyScreen.style.display = 'none';
+            
+            // Generate maze and clues (only the first player should do this in a real game)
+            // For now, everyone generates their own, but they'll sync up via broadcast.
+            gameState.maze = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
+            gameState.clues = placeClues(gameState.maze, NUM_CLUES, MIN_CLUE_DISTANCE);
+
+            const startPos = { x: CELL_SIZE * 1.5, y: CELL_SIZE * 1.5 };
+            gameState.players[myPlayerId] = {
+                id: myPlayerId,
+                username: username,
+                x: startPos.x,
+                y: startPos.y,
+                color: `hsl(${Math.random() * 360}, 80%, 70%)`
+            };
+
+            setupSupabaseChannels();
+            gameLoop();
+        }
+
+        function gameLoop() {
+            updateMyPlayerPosition();
+            checkClueCollection();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- 3. DRAWING & RENDERING ---
+        
+        function drawGame() {
+            if (!ctx) return;
+            // Clear canvas with black background
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Maze
+            drawMaze();
+            
+            // Draw Clues
+            drawClues();
+
+            // Draw Players
+            Object.values(gameState.players).forEach(player => {
+                ctx.fillStyle = player.color;
+                ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
+            });
+        }
+        
+        function drawMaze() {
+            ctx.strokeStyle = '#374151'; // gray-700
+            ctx.lineWidth = 2;
+            for (let y = 0; y < MAZE_HEIGHT; y++) {
+                for (let x = 0; x < MAZE_WIDTH; x++) {
+                    const cell = gameState.maze[y][x];
+                    const xPos = x * CELL_SIZE;
+                    const yPos = y * CELL_SIZE;
+                    if (cell.walls.top) {
+                        ctx.beginPath();
+                        ctx.moveTo(xPos, yPos);
+                        ctx.lineTo(xPos + CELL_SIZE, yPos);
+                        ctx.stroke();
+                    }
+                    if (cell.walls.right) {
+                        ctx.beginPath();
+                        ctx.moveTo(xPos + CELL_SIZE, yPos);
+                        ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                        ctx.stroke();
+                    }
+                     if (cell.walls.bottom) {
+                        ctx.beginPath();
+                        ctx.moveTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
+                        ctx.lineTo(xPos, yPos + CELL_SIZE);
+                        ctx.stroke();
+                    }
+                    if (cell.walls.left) {
+                        ctx.beginPath();
+                        ctx.moveTo(xPos, yPos + CELL_SIZE);
+                        ctx.lineTo(xPos, yPos);
+                        ctx.stroke();
+                    }
+                }
             }
         }
 
-        function updateMediaButtonsUI() {
-            micOnIcon.classList.toggle('hidden', !isMicOn);
-            micOffIcon.classList.toggle('hidden', isMicOn);
-            toggleMicBtn.classList.toggle('bg-green-600', isMicOn);
-            toggleMicBtn.classList.toggle('hover:bg-green-500', isMicOn);
-            toggleMicBtn.classList.toggle('bg-red-600', !isMicOn);
-            toggleMicBtn.classList.toggle('hover:bg-red-500', !isMicOn);
-
-            camOnIcon.classList.toggle('hidden', !isCamOn);
-            camOffIcon.classList.toggle('hidden', isCamOn);
-            toggleCamBtn.classList.toggle('bg-green-600', isCamOn);
-            toggleCamBtn.classList.toggle('hover:bg-green-500', isCamOn);
-            toggleCamBtn.classList.toggle('bg-red-600', !isCamOn);
-            toggleCamBtn.classList.toggle('hover:bg-red-500', !isCamOn);
+        function drawClues() {
+            ctx.fillStyle = 'yellow';
+            gameState.clues.forEach(clue => {
+                if (!clue.collected) {
+                    const xPos = (clue.x + 0.5) * CELL_SIZE;
+                    const yPos = (clue.y + 0.5) * CELL_SIZE;
+                    ctx.beginPath();
+                    ctx.arc(xPos, yPos, CELL_SIZE * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
         }
 
-        toggleMicBtn.addEventListener('click', () => {
-            isMicOn = !isMicOn;
-            if (localStream) localStream.getAudioTracks()[0].enabled = isMicOn;
-            updateMediaButtonsUI();
-        });
 
-        toggleCamBtn.addEventListener('click', () => {
-            isCamOn = !isCamOn;
-            if (localStream) localStream.getVideoTracks()[0].enabled = isCamOn;
-            updateMediaButtonsUI();
-        });
+        // --- 4. SUPABASE REALTIME ---
+
+        function setupSupabaseChannels() {
+             const channelName = 'game-channel-main';
+             gameChannel = supabaseClient.channel(channelName, {
+                config: {
+                    broadcast: { self: false }
+                }
+            });
+
+            gameChannel
+                .on('broadcast', { event: 'player_update' }, ({ payload }) => {
+                     // In a real game, you might need to handle the initial maze/clue state here
+                    if (payload.id && payload.id !== myPlayerId) {
+                        gameState.players[payload.id] = payload;
+                    }
+                })
+                .on('broadcast', { event: 'clue_update' }, ({ payload }) => {
+                    const clue = gameState.clues.find(c => c.id === payload.clueId);
+                    if(clue) clue.collected = true;
+                    updateClueCounter();
+                })
+                .on('presence', { event: 'sync' }, () => {
+                    const presenceState = gameChannel.presenceState();
+                })
+                .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+                    leftPresences.forEach(p => {
+                        delete gameState.players[p.player_id];
+                    });
+                })
+                .subscribe(async (status) => {
+                    if (status === 'SUBSCRIBED') {
+                        await gameChannel.track({ player_id: myPlayerId, username: gameState.players[myPlayerId].username });
+                        // Broadcast initial state
+                        broadcastPlayerState();
+                    }
+                });
+        }
+        
+        function broadcastPlayerState() {
+             if (gameChannel && gameState.players[myPlayerId]) {
+                gameChannel.send({
+                    type: 'broadcast',
+                    event: 'player_update',
+                    payload: gameState.players[myPlayerId]
+                });
+            }
+        }
+        
+        function broadcastClueCollected(clueId) {
+             if (gameChannel) {
+                gameChannel.send({
+                    type: 'broadcast',
+                    event: 'clue_update',
+                    payload: { clueId: clueId }
+                });
+            }
+        }
 
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-        const playerSpeed = 3;
+        const playerSpeed = 2; // Adjusted for maze navigation
         const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: document.getElementById('joystick-container').offsetWidth / 2 };
+        
         window.addEventListener('keydown', (e) => {
             if (document.activeElement !== chatInput && keys.hasOwnProperty(e.key)) {
-                e.preventDefault(); // Prevent scrolling the page with arrow keys
+                e.preventDefault();
                 keys[e.key] = true;
             }
         });
@@ -211,165 +335,182 @@
                 keys[e.key] = false;
             }
         });
+
         const joystickContainer = document.getElementById('joystick-container');
         const joystickThumb = document.getElementById('joystick-thumb');
         joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; });
         joystickContainer.addEventListener('touchmove', (e) => {
-            e.preventDefault(); if (!joystick.active) return; const touch = e.touches[0]; const rect = joystickContainer.getBoundingClientRect();
-            joystick.x = touch.clientX - rect.left - joystick.radius; joystick.y = touch.clientY - rect.top - joystick.radius;
+            if (!joystick.active) return;
+            e.preventDefault();
+            const rect = joystickContainer.getBoundingClientRect();
+            joystick.x = e.touches[0].clientX - rect.left - joystick.radius;
+            joystick.y = e.touches[0].clientY - rect.top - joystick.radius;
             const mag = Math.sqrt(joystick.x**2 + joystick.y**2);
-            if (mag > joystick.radius) { joystick.x = (joystick.x / mag) * joystick.radius; joystick.y = (joystick.y / mag) * joystick.radius; }
-            joystick.dx = joystick.x / joystick.radius; joystick.dy = joystick.y / joystick.radius;
+            if (mag > joystick.radius) {
+                joystick.x = (joystick.x / mag) * joystick.radius;
+                joystick.y = (joystick.y / mag) * joystick.radius;
+            }
             joystickThumb.style.transform = `translate(${joystick.x}px, ${joystick.y}px)`;
+            joystick.dx = joystick.x / joystick.radius;
+            joystick.dy = joystick.y / joystick.radius;
         });
         joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystick.active = false; joystick.dx = 0; joystick.dy = 0; joystickThumb.style.transform = `translate(0px, 0px)`; });
 
         function updateMyPlayerPosition() {
-            if (!gameState.players[myPlayerId]) return;
+            const player = gameState.players[myPlayerId];
+            if (!player) return;
+
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
+            
             if (mag > 0) {
-                gameState.players[myPlayerId].x += (dx / mag) * playerSpeed;
-                gameState.players[myPlayerId].y += (dy / mag) * playerSpeed;
-            }
-            gameState.players[myPlayerId].x = Math.max(10, Math.min(canvas.width - 10, gameState.players[myPlayerId].x));
-            gameState.players[myPlayerId].y = Math.max(10, Math.min(canvas.height - 10, gameState.players[myPlayerId].y));
-        }
+                const normalizedDx = (dx / mag) * playerSpeed;
+                const normalizedDy = (dy / mag) * playerSpeed;
+                
+                let nextX = player.x + normalizedDx;
+                let nextY = player.y + normalizedDy;
+                
+                // --- Collision Detection ---
+                const playerRadius = 4; // A small buffer
+                let currentCellX = Math.floor(player.x / CELL_SIZE);
+                let currentCellY = Math.floor(player.y / CELL_SIZE);
+                let nextCellX = Math.floor(nextX / CELL_SIZE);
+                let nextCellY = Math.floor(nextY / CELL_SIZE);
 
-        // --- 6. GAME LOOP ---
-        function draw() {
-            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
-            ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#374151';
-            for (let i = 0; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
-            for (let i = 0; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
-            for (const id in gameState.players) {
-                const p = gameState.players[id]; ctx.fillStyle = id === myPlayerId ? 'cyan' : (p.isAlive ? 'red' : 'gray');
-                ctx.fillRect(p.x - 10, p.y - 10, 20, 20); ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText(p.name, p.x, p.y - 15);
-            }
-        }
-        function gameLoop() {
-            if (gameState.players[myPlayerId]?.isAlive) updateMyPlayerPosition();
-            draw(); requestAnimationFrame(gameLoop);
-        }
-
-        // --- 7. REALTIME & WEBRTC SIGNALING ---
-        async function createPeerConnection(targetId) {
-            const pc = new RTCPeerConnection(STUN_SERVER);
-            peerConnections[targetId] = pc;
-
-            if (localStream) {
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-            }
-
-            pc.onicecandidate = event => {
-                if (event.candidate) {
-                    channel.send({ type: 'broadcast', event: 'webrtc-ice-candidate', payload: { to: targetId, from: myPlayerId, candidate: event.candidate } });
+                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) {
+                    nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
                 }
+                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) {
+                    nextX = currentCellX * CELL_SIZE + playerRadius;
+                }
+                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) {
+                    nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
+                }
+                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) {
+                    nextY = currentCellY * CELL_SIZE + playerRadius;
+                }
+                
+                player.x = nextX;
+                player.y = nextY;
+
+                broadcastPlayerState();
+            }
+        }
+        
+        // --- 6. MAZE & CLUE GENERATION/LOGIC ---
+
+        function generateMaze(width, height) {
+            let maze = Array.from({ length: height }, (_, y) => 
+                Array.from({ length: width }, (_, x) => ({
+                    x, y,
+                    walls: { top: true, right: true, bottom: true, left: true },
+                    visited: false
+                }))
+            );
+
+            let stack = [];
+            let current = maze[0][0];
+            current.visited = true;
+            let visitedCount = 1;
+
+            const getNeighbors = (cell) => {
+                let neighbors = [];
+                const {x, y} = cell;
+                if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); // Top
+                if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); // Right
+                if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); // Bottom
+                if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); // Left
+                return neighbors;
             };
 
-            pc.ontrack = event => {
-                remoteVideoPlaceholder.style.display = 'none';
-                let remoteVideo = document.getElementById(`video-${targetId}`);
-                if (!remoteVideo) {
-                    remoteVideo = document.createElement('video');
-                    remoteVideo.id = `video-${targetId}`;
-                    remoteVideo.autoplay = true;
-                    remoteVideo.playsInline = true;
-                    remoteVideosContainer.appendChild(remoteVideo);
+            while (visitedCount < width * height) {
+                let neighbors = getNeighbors(current);
+                if (neighbors.length > 0) {
+                    stack.push(current);
+                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    // Remove walls between current and next
+                    if (next.y < current.y) { // Top
+                        current.walls.top = false;
+                        next.walls.bottom = false;
+                    } else if (next.x > current.x) { // Right
+                        current.walls.right = false;
+                        next.walls.left = false;
+                    } else if (next.y > current.y) { // Bottom
+                        current.walls.bottom = false;
+                        next.walls.top = false;
+                    } else if (next.x < current.x) { // Left
+                        current.walls.left = false;
+                        next.walls.right = false;
+                    }
+                    current = next;
+                    current.visited = true;
+                    visitedCount++;
+                } else if (stack.length > 0) {
+                    current = stack.pop();
                 }
-                remoteVideo.srcObject = event.streams[0];
-            };
-            return pc;
+            }
+            return maze;
         }
-
-        async function broadcastMyState() {
-             if (!gameState.players[myPlayerId]) return;
-             await channel.send({ type: 'broadcast', event: 'player-update', payload: { id: myPlayerId, data: gameState.players[myPlayerId] } });
-        }
-
-        channel
-            .on('broadcast', { event: 'player-update' }, ({ payload }) => {
-                 if (payload.id === myPlayerId) return;
-                 const isNewPlayer = !gameState.players[payload.id];
-                 gameState.players[payload.id] = payload.data;
-                 if (isNewPlayer) { // New player joined, initiate WebRTC
-                     console.log(`New player ${payload.data.name} detected. Creating offer.`);
-                     createPeerConnection(payload.id).then(pc => {
-                         pc.createOffer().then(offer => {
-                             pc.setLocalDescription(offer);
-                             channel.send({ type: 'broadcast', event: 'webrtc-offer', payload: { to: payload.id, from: myPlayerId, offer } });
-                         });
-                     });
-                 }
-            })
-            .on('broadcast', { event: 'webrtc-offer' }, async ({ payload }) => {
-                if (payload.to !== myPlayerId) return;
-                console.log(`Received WebRTC offer from ${payload.from}`);
-                const pc = await createPeerConnection(payload.from);
-                await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                channel.send({ type: 'broadcast', event: 'webrtc-answer', payload: { to: payload.from, from: myPlayerId, answer } });
-            })
-            .on('broadcast', { event: 'webrtc-answer' }, async ({ payload }) => {
-                if (payload.to !== myPlayerId) return;
-                console.log(`Received WebRTC answer from ${payload.from}`);
-                const pc = peerConnections[payload.from];
-                if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
-            })
-            .on('broadcast', { event: 'webrtc-ice-candidate' }, ({ payload }) => {
-                if (payload.to !== myPlayerId) return;
-                const pc = peerConnections[payload.from];
-                if (pc && payload.candidate) {
-                    pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+        
+        function placeClues(maze, numClues, minDistance) {
+            let clues = [];
+            let possibleLocations = [];
+            // Get all possible floor locations
+            for (let y = 0; y < maze.length; y++) {
+                for (let x = 0; x < maze[0].length; x++) {
+                    possibleLocations.push({x, y});
                 }
-            })
-            .on('broadcast', { event: 'player-leave' }, ({ payload }) => {
-                 console.log(`Player ${gameState.players[payload.id]?.name} left.`);
-                 delete gameState.players[payload.id];
-                 if (peerConnections[payload.id]) {
-                     peerConnections[payload.id].close();
-                     delete peerConnections[payload.id];
-                 }
-                 const remoteVideo = document.getElementById(`video-${payload.id}`);
-                 if (remoteVideo) remoteVideo.remove();
-                 if (Object.keys(peerConnections).length === 0) {
-                     remoteVideoPlaceholder.style.display = 'block';
-                 }
-            })
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    loadingScreen.classList.add('hidden');
-                    lobbyScreen.classList.remove('hidden');
+            }
+            
+            // Shuffle locations to randomize
+            for (let i = possibleLocations.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]];
+            }
+
+            while (clues.length < numClues && possibleLocations.length > 0) {
+                let loc = possibleLocations.pop();
+                let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
+
+                if (!tooClose) {
+                    clues.push({
+                        id: `clue_${clues.length}`,
+                        x: loc.x,
+                        y: loc.y,
+                        collected: false
+                    });
+                }
+            }
+            return clues;
+        }
+        
+        function checkClueCollection() {
+            const player = gameState.players[myPlayerId];
+            if(!player) return;
+            
+            const playerCellX = Math.floor(player.x / CELL_SIZE);
+            const playerCellY = Math.floor(player.y / CELL_SIZE);
+
+            gameState.clues.forEach(clue => {
+                if (!clue.collected && clue.x === playerCellX && clue.y === playerCellY) {
+                    clue.collected = true;
+                    console.log(`Collected clue ${clue.id}`);
+                    broadcastClueCollected(clue.id);
+                    updateClueCounter();
                 }
             });
-            
-        // --- 8. INITIALIZATION ---
-        function init() {
-            joinGameBtn.onclick = async () => {
-                const username = usernameInput.value.trim();
-                if (username.length < 3) { alert('Please enter a name (at least 3 characters).'); return; }
-
-                await startMedia(); // Get media access before joining
-
-                gameState.players[myPlayerId] = { name: username, x: Math.random() * 500 + 50, y: Math.random() * 300 + 50, isAlive: true };
-                lobbyScreen.classList.add('hidden');
-                gameLoop();
-                setInterval(broadcastMyState, 1000 / 30);
-            };
-            
-            window.addEventListener('beforeunload', async () => {
-                await channel.send({ type: 'broadcast', event: 'player-leave', payload: { id: myPlayerId } });
-                supabase.removeChannel(channel);
-            });
         }
-
-        init();
+        
+        function updateClueCounter() {
+            const collectedCount = gameState.clues.filter(c => c.collected).length;
+            cluesText.textContent = `Clues Found: ${collectedCount}/${NUM_CLUES}`;
+        }
+        
+        // --- 7. WEBRTC (VIDEO/AUDIO CHAT) ---
+        // Placeholder for WebRTC implementation
+        
     </script>
 </body>
 </html>
-
-
-
 
