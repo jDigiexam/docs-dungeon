@@ -103,6 +103,7 @@
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+        // DOM Elements
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         const loadingScreen = document.getElementById('loading-screen');
@@ -110,32 +111,41 @@
         const joinGameBtn = document.getElementById('join-game-btn');
         const usernameInput = document.getElementById('username-input');
         const chatInput = document.getElementById('chat-input');
+        const chatMessages = document.getElementById('chat-messages');
         const cluesText = document.getElementById('clues-text');
+        const localVideo = document.getElementById('local-video');
+        const remoteVideosContainer = document.getElementById('remote-videos-container');
+        const toggleMicBtn = document.getElementById('toggle-mic-btn');
+        const toggleCamBtn = document.getElementById('toggle-cam-btn');
+        const micOnIcon = document.getElementById('mic-on-icon');
+        const micOffIcon = document.getElementById('mic-off-icon');
+        const camOnIcon = document.getElementById('cam-on-icon');
+        const camOffIcon = document.getElementById('cam-off-icon');
 
-        const gameState = {
-            players: {},
-            maze: [],
-            clues: []
-        };
+        // Game State
+        const gameState = { players: {}, maze: [], clues: [] };
         let myPlayerId = null;
         let gameChannel = null;
         
         // Maze and Clue Constants
-        const MAZE_WIDTH = 25; // In cells
-        const MAZE_HEIGHT = 20; // In cells
+        const MAZE_WIDTH = 25;
+        const MAZE_HEIGHT = 20;
         const NUM_CLUES = 5;
-        const MIN_CLUE_DISTANCE = 5; // Min grid cells between clues
+        const MIN_CLUE_DISTANCE = 5;
+        let CELL_SIZE = 32;
 
-        let CELL_SIZE = 32; // This will be calculated dynamically
+        // WebRTC State
+        let localStream;
+        let peerConnections = {};
+        const peerConnectionConfig = {
+            'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]
+        };
+        let isMicOn = false;
+        let isCamOn = false;
 
         // --- 1. INITIALIZATION ---
-        window.onload = () => {
-            initGame();
-        };
-
-        window.onresize = () => {
-             resizeCanvas();
-        };
+        window.onload = () => initGame();
+        window.onresize = () => resizeCanvas();
 
         function initGame() {
             resizeCanvas();
@@ -157,14 +167,13 @@
             joinGame(username);
         });
 
-
         // --- 2. GAME LOGIC ---
-
-        function joinGame(username) {
+        async function joinGame(username) {
             lobbyScreen.style.display = 'none';
             
-            // Generate maze and clues (only the first player should do this in a real game)
-            // For now, everyone generates their own, but they'll sync up via broadcast.
+            // Start WebRTC first to get permissions
+            await startLocalMedia();
+
             gameState.maze = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
             gameState.clues = placeClues(gameState.maze, NUM_CLUES, MIN_CLUE_DISTANCE);
 
@@ -174,7 +183,8 @@
                 username: username,
                 x: startPos.x,
                 y: startPos.y,
-                color: `hsl(${Math.random() * 360}, 80%, 70%)`
+                color: `hsl(${Math.random() * 360}, 80%, 70%)`,
+                teamId: myPlayerId // Placeholder team assignment
             };
 
             setupSupabaseChannels();
@@ -189,20 +199,12 @@
         }
 
         // --- 3. DRAWING & RENDERING ---
-        
         function drawGame() {
             if (!ctx) return;
-            // Clear canvas with black background
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw Maze
             drawMaze();
-            
-            // Draw Clues
             drawClues();
-
-            // Draw Players
             Object.values(gameState.players).forEach(player => {
                 ctx.fillStyle = player.color;
                 ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
@@ -210,45 +212,28 @@
         }
         
         function drawMaze() {
-            ctx.strokeStyle = '#374151'; // gray-700
+            ctx.strokeStyle = '#374151';
             ctx.lineWidth = 2;
             for (let y = 0; y < MAZE_HEIGHT; y++) {
                 for (let x = 0; x < MAZE_WIDTH; x++) {
                     const cell = gameState.maze[y][x];
                     const xPos = x * CELL_SIZE;
                     const yPos = y * CELL_SIZE;
-                    if (cell.walls.top) {
-                        ctx.beginPath();
-                        ctx.moveTo(xPos, yPos);
-                        ctx.lineTo(xPos + CELL_SIZE, yPos);
-                        ctx.stroke();
-                    }
-                    if (cell.walls.right) {
-                        ctx.beginPath();
-                        ctx.moveTo(xPos + CELL_SIZE, yPos);
-                        ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
-                        ctx.stroke();
-                    }
-                     if (cell.walls.bottom) {
-                        ctx.beginPath();
-                        ctx.moveTo(xPos + CELL_SIZE, yPos + CELL_SIZE);
-                        ctx.lineTo(xPos, yPos + CELL_SIZE);
-                        ctx.stroke();
-                    }
-                    if (cell.walls.left) {
-                        ctx.beginPath();
-                        ctx.moveTo(xPos, yPos + CELL_SIZE);
-                        ctx.lineTo(xPos, yPos);
-                        ctx.stroke();
-                    }
+                    if (cell.walls.top) { ctx.beginPath(); ctx.moveTo(xPos, yPos); ctx.lineTo(xPos + CELL_SIZE, yPos); ctx.stroke(); }
+                    if (cell.walls.right) { ctx.beginPath(); ctx.moveTo(xPos + CELL_SIZE, yPos); ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE); ctx.stroke(); }
+                    if (cell.walls.bottom) { ctx.beginPath(); ctx.moveTo(xPos + CELL_SIZE, yPos + CELL_SIZE); ctx.lineTo(xPos, yPos + CELL_SIZE); ctx.stroke(); }
+                    if (cell.walls.left) { ctx.beginPath(); ctx.moveTo(xPos, yPos + CELL_SIZE); ctx.lineTo(xPos, yPos); ctx.stroke(); }
                 }
             }
         }
 
         function drawClues() {
+            const myTeamId = gameState.players[myPlayerId]?.teamId;
+            if (!myTeamId) return;
+
             ctx.fillStyle = 'yellow';
             gameState.clues.forEach(clue => {
-                if (!clue.collected) {
+                if (!clue.collectedByTeams.includes(myTeamId)) {
                     const xPos = (clue.x + 0.5) * CELL_SIZE;
                     const yPos = (clue.y + 0.5) * CELL_SIZE;
                     ctx.beginPath();
@@ -258,83 +243,68 @@
             });
         }
 
-
         // --- 4. SUPABASE REALTIME ---
-
         function setupSupabaseChannels() {
-             const channelName = 'game-channel-main';
-             gameChannel = supabaseClient.channel(channelName, {
-                config: {
-                    broadcast: { self: false }
-                }
-            });
+             const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
+             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
 
             gameChannel
-                .on('broadcast', { event: 'player_update' }, ({ payload }) => {
-                     // In a real game, you might need to handle the initial maze/clue state here
-                    if (payload.id && payload.id !== myPlayerId) {
-                        gameState.players[payload.id] = payload;
-                    }
-                })
+                .on('broadcast', { event: 'player_update' }, ({ payload }) => { if (payload.id && payload.id !== myPlayerId) gameState.players[payload.id] = payload; })
                 .on('broadcast', { event: 'clue_update' }, ({ payload }) => {
                     const clue = gameState.clues.find(c => c.id === payload.clueId);
-                    if(clue) clue.collected = true;
-                    updateClueCounter();
+                    if (clue && !clue.collectedByTeams.includes(payload.teamId)) {
+                        clue.collectedByTeams.push(payload.teamId);
+                    }
                 })
+                .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
+                .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
+                    for (const id in presenceState) {
+                        if (id !== myPlayerId) {
+                            const pres = presenceState[id][0];
+                            // This is where we initiate WebRTC calls to existing users
+                             if (!peerConnections[pres.player_id]) {
+                                createPeerConnection(pres.player_id, true);
+                            }
+                        }
+                    }
+                })
+                .on('presence', { event: 'join' }, ({ newPresences }) => {
+                    newPresences.forEach(p => {
+                       // New user joined, we don't need to do anything here, sync handles it.
+                       // The new user will initiate the call.
+                    });
                 })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
                     leftPresences.forEach(p => {
                         delete gameState.players[p.player_id];
+                        if (peerConnections[p.player_id]) {
+                            peerConnections[p.player_id].close();
+                            delete peerConnections[p.player_id];
+                        }
+                        const videoElement = document.getElementById(`video-${p.player_id}`);
+                        if (videoElement) videoElement.remove();
                     });
                 })
                 .subscribe(async (status) => {
                     if (status === 'SUBSCRIBED') {
                         await gameChannel.track({ player_id: myPlayerId, username: gameState.players[myPlayerId].username });
-                        // Broadcast initial state
                         broadcastPlayerState();
                     }
                 });
         }
         
-        function broadcastPlayerState() {
-             if (gameChannel && gameState.players[myPlayerId]) {
-                gameChannel.send({
-                    type: 'broadcast',
-                    event: 'player_update',
-                    payload: gameState.players[myPlayerId]
-                });
-            }
-        }
-        
-        function broadcastClueCollected(clueId) {
-             if (gameChannel) {
-                gameChannel.send({
-                    type: 'broadcast',
-                    event: 'clue_update',
-                    payload: { clueId: clueId }
-                });
-            }
-        }
-
+        function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
+        function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-        const playerSpeed = 2; // Adjusted for maze navigation
+        const playerSpeed = 2;
         const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: document.getElementById('joystick-container').offsetWidth / 2 };
         
-        window.addEventListener('keydown', (e) => {
-            if (document.activeElement !== chatInput && keys.hasOwnProperty(e.key)) {
-                e.preventDefault();
-                keys[e.key] = true;
-            }
-        });
-        window.addEventListener('keyup', (e) => {
-            if (keys.hasOwnProperty(e.key)) {
-                keys[e.key] = false;
-            }
-        });
+        window.addEventListener('keydown', (e) => { if (document.activeElement !== chatInput && keys.hasOwnProperty(e.key)) { e.preventDefault(); keys[e.key] = true; } });
+        window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
         const joystickContainer = document.getElementById('joystick-container');
         const joystickThumb = document.getElementById('joystick-thumb');
@@ -346,10 +316,7 @@
             joystick.x = e.touches[0].clientX - rect.left - joystick.radius;
             joystick.y = e.touches[0].clientY - rect.top - joystick.radius;
             const mag = Math.sqrt(joystick.x**2 + joystick.y**2);
-            if (mag > joystick.radius) {
-                joystick.x = (joystick.x / mag) * joystick.radius;
-                joystick.y = (joystick.y / mag) * joystick.radius;
-            }
+            if (mag > joystick.radius) { joystick.x = (joystick.x / mag) * joystick.radius; joystick.y = (joystick.y / mag) * joystick.radius; }
             joystickThumb.style.transform = `translate(${joystick.x}px, ${joystick.y}px)`;
             joystick.dx = joystick.x / joystick.radius;
             joystick.dy = joystick.y / joystick.radius;
@@ -359,7 +326,6 @@
         function updateMyPlayerPosition() {
             const player = gameState.players[myPlayerId];
             if (!player) return;
-
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
@@ -367,149 +333,164 @@
             if (mag > 0) {
                 const normalizedDx = (dx / mag) * playerSpeed;
                 const normalizedDy = (dy / mag) * playerSpeed;
-                
                 let nextX = player.x + normalizedDx;
                 let nextY = player.y + normalizedDy;
-                
-                // --- Collision Detection ---
-                const playerRadius = 4; // A small buffer
+                const playerRadius = 4;
                 let currentCellX = Math.floor(player.x / CELL_SIZE);
                 let currentCellY = Math.floor(player.y / CELL_SIZE);
-                let nextCellX = Math.floor(nextX / CELL_SIZE);
-                let nextCellY = Math.floor(nextY / CELL_SIZE);
-
-                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) {
-                    nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
-                }
-                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) {
-                    nextX = currentCellX * CELL_SIZE + playerRadius;
-                }
-                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) {
-                    nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
-                }
-                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) {
-                    nextY = currentCellY * CELL_SIZE + playerRadius;
-                }
-                
+                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
+                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) nextX = currentCellX * CELL_SIZE + playerRadius;
+                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
+                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) nextY = currentCellY * CELL_SIZE + playerRadius;
                 player.x = nextX;
                 player.y = nextY;
-
                 broadcastPlayerState();
             }
         }
         
-        // --- 6. MAZE & CLUE GENERATION/LOGIC ---
-
-        function generateMaze(width, height) {
-            let maze = Array.from({ length: height }, (_, y) => 
-                Array.from({ length: width }, (_, x) => ({
-                    x, y,
-                    walls: { top: true, right: true, bottom: true, left: true },
-                    visited: false
-                }))
-            );
-
-            let stack = [];
-            let current = maze[0][0];
-            current.visited = true;
-            let visitedCount = 1;
-
-            const getNeighbors = (cell) => {
-                let neighbors = [];
-                const {x, y} = cell;
-                if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); // Top
-                if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); // Right
-                if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); // Bottom
-                if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); // Left
-                return neighbors;
-            };
-
-            while (visitedCount < width * height) {
-                let neighbors = getNeighbors(current);
-                if (neighbors.length > 0) {
-                    stack.push(current);
-                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    // Remove walls between current and next
-                    if (next.y < current.y) { // Top
-                        current.walls.top = false;
-                        next.walls.bottom = false;
-                    } else if (next.x > current.x) { // Right
-                        current.walls.right = false;
-                        next.walls.left = false;
-                    } else if (next.y > current.y) { // Bottom
-                        current.walls.bottom = false;
-                        next.walls.top = false;
-                    } else if (next.x < current.x) { // Left
-                        current.walls.left = false;
-                        next.walls.right = false;
-                    }
-                    current = next;
-                    current.visited = true;
-                    visitedCount++;
-                } else if (stack.length > 0) {
-                    current = stack.pop();
-                }
-            }
-            return maze;
+        // --- 6. MAZE & CLUE LOGIC ---
+        function generateMaze(width, height) { /* ... (maze generation code unchanged) ... */
+             let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
+            let stack = []; let current = maze[0][0]; current.visited = true;
+            const getNeighbors = (cell) => { let neighbors = []; const {x, y} = cell; if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); return neighbors; };
+            while (true) { let neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; } current = next; current.visited = true; } else if (stack.length > 0) { current = stack.pop(); } else { break; } } return maze;
         }
-        
-        function placeClues(maze, numClues, minDistance) {
-            let clues = [];
-            let possibleLocations = [];
-            // Get all possible floor locations
-            for (let y = 0; y < maze.length; y++) {
-                for (let x = 0; x < maze[0].length; x++) {
-                    possibleLocations.push({x, y});
-                }
-            }
-            
-            // Shuffle locations to randomize
-            for (let i = possibleLocations.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]];
-            }
-
-            while (clues.length < numClues && possibleLocations.length > 0) {
-                let loc = possibleLocations.pop();
-                let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
-
-                if (!tooClose) {
-                    clues.push({
-                        id: `clue_${clues.length}`,
-                        x: loc.x,
-                        y: loc.y,
-                        collected: false
-                    });
-                }
-            }
-            return clues;
+        function placeClues(maze, numClues, minDistance) { /* ... (clue placement code unchanged) ... */
+            let clues = []; let possibleLocations = []; for (let y = 0; y < maze.length; y++) { for (let x = 0; x < maze[0].length; x++) { possibleLocations.push({x, y}); } }
+            for (let i = possibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; }
+            while (clues.length < numClues && possibleLocations.length > 0) { let loc = possibleLocations.pop(); let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); if (!tooClose) { clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); } } return clues;
         }
-        
         function checkClueCollection() {
-            const player = gameState.players[myPlayerId];
-            if(!player) return;
-            
-            const playerCellX = Math.floor(player.x / CELL_SIZE);
-            const playerCellY = Math.floor(player.y / CELL_SIZE);
-
-            gameState.clues.forEach(clue => {
-                if (!clue.collected && clue.x === playerCellX && clue.y === playerCellY) {
-                    clue.collected = true;
-                    console.log(`Collected clue ${clue.id}`);
-                    broadcastClueCollected(clue.id);
-                    updateClueCounter();
-                }
-            });
+            const player = gameState.players[myPlayerId]; if(!player) return;
+            const playerCellX = Math.floor(player.x / CELL_SIZE); const playerCellY = Math.floor(player.y / CELL_SIZE);
+            gameState.clues.forEach(clue => { if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { clue.collectedByTeams.push(player.teamId); broadcastClueCollected(clue.id, player.teamId); updateClueCounter(); } });
         }
-        
         function updateClueCounter() {
-            const collectedCount = gameState.clues.filter(c => c.collected).length;
+            const myTeamId = gameState.players[myPlayerId]?.teamId; if (!myTeamId) return;
+            const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myTeamId)).length;
             cluesText.textContent = `Clues Found: ${collectedCount}/${NUM_CLUES}`;
         }
         
         // --- 7. WEBRTC (VIDEO/AUDIO CHAT) ---
-        // Placeholder for WebRTC implementation
+        async function startLocalMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                // Start with mic and cam off
+                localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
+                localStream.getVideoTracks().forEach(track => track.enabled = isCamOn);
+            } catch (error) {
+                console.error("Error accessing media devices.", error);
+                alert("Could not access camera and microphone. Video chat will be disabled.");
+            }
+        }
+
+        toggleMicBtn.addEventListener('click', () => {
+            isMicOn = !isMicOn;
+            if (localStream) localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
+            micOnIcon.classList.toggle('hidden', !isMicOn);
+            micOffIcon.classList.toggle('hidden', isMicOn);
+            toggleMicBtn.classList.toggle('bg-green-600', isMicOn);
+            toggleMicBtn.classList.toggle('bg-red-600', !isMicOn);
+        });
+
+        toggleCamBtn.addEventListener('click', () => {
+            isCamOn = !isCamOn;
+            if (localStream) localStream.getVideoTracks().forEach(track => track.enabled = isCamOn);
+            camOnIcon.classList.toggle('hidden', !isCamOn);
+            camOffIcon.classList.toggle('hidden', isCamOn);
+            toggleCamBtn.classList.toggle('bg-green-600', isCamOn);
+            toggleCamBtn.classList.toggle('bg-red-600', !isCamOn);
+        });
         
+        function sendRtcSignal(to, data) {
+            gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } });
+        }
+
+        function createPeerConnection(peerId, isInitiator) {
+            if (peerConnections[peerId]) return;
+            peerConnections[peerId] = new RTCPeerConnection(peerConnectionConfig);
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => peerConnections[peerId].addTrack(track, localStream));
+            }
+
+            peerConnections[peerId].onicecandidate = event => {
+                if (event.candidate) {
+                    sendRtcSignal(peerId, { ice: event.candidate });
+                }
+            };
+
+            peerConnections[peerId].ontrack = event => {
+                let videoElement = document.getElementById(`video-${peerId}`);
+                if (!videoElement) {
+                    remoteVideosContainer.innerHTML = ''; // Clear placeholder
+                    videoElement = document.createElement('video');
+                    videoElement.id = `video-${peerId}`;
+                    videoElement.autoplay = true;
+                    videoElement.playsInline = true;
+                    videoElement.classList.add('w-full', 'h-full', 'object-cover');
+                    remoteVideosContainer.appendChild(videoElement);
+                }
+                videoElement.srcObject = event.streams[0];
+            };
+
+            if (isInitiator) {
+                peerConnections[peerId].createOffer()
+                    .then(offer => peerConnections[peerId].setLocalDescription(offer))
+                    .then(() => sendRtcSignal(peerId, { sdp: peerConnections[peerId].localDescription }));
+            }
+        }
+        
+        function handleRtcSignal({ from, to, data }) {
+            if (to !== myPlayerId) return;
+
+            let pc = peerConnections[from];
+            if (!pc) {
+                createPeerConnection(from, false);
+                pc = peerConnections[from];
+            }
+            
+            if (data.sdp) {
+                pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+                    .then(() => {
+                        if (data.sdp.type === 'offer') {
+                            pc.createAnswer()
+                                .then(answer => pc.setLocalDescription(answer))
+                                .then(() => sendRtcSignal(from, { sdp: pc.localDescription }));
+                        }
+                    });
+            } else if (data.ice) {
+                pc.addIceCandidate(new RTCIceCandidate(data.ice));
+            }
+        }
+        
+        // --- 8. CHAT ---
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+                const message = {
+                    username: gameState.players[myPlayerId]?.username || 'Player',
+                    text: chatInput.value.trim(),
+                    color: gameState.players[myPlayerId]?.color || '#FFFFFF'
+                };
+                gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: message });
+                displayChatMessage(message); // Display my own message immediately
+                chatInput.value = '';
+            }
+        });
+
+        function displayChatMessage({ username, text, color }) {
+            const messageEl = document.createElement('p');
+            messageEl.classList.add('mb-1');
+            const usernameSpan = document.createElement('span');
+            usernameSpan.textContent = `${username}: `;
+            usernameSpan.style.fontWeight = 'bold';
+            usernameSpan.style.color = color;
+            messageEl.appendChild(usernameSpan);
+            messageEl.append(document.createTextNode(text));
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+        }
     </script>
 </body>
 </html>
