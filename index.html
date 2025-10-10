@@ -20,7 +20,7 @@
         <!-- Status & Clues -->
         <div class="bg-gray-900/50 p-2 rounded">
             <div id="status-text" class="text-lg">Status: Alive</div>
-            <div id="clues-text" class="text-lg">Clues Found: 0/5</div>
+            <div id="clues-text" class="text-lg">Clues Found: 0/7</div>
         </div>
         
         <!-- Video Streams -->
@@ -84,6 +84,13 @@
                 <button id="join-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded w-full">Join Game</button>
             </div>
         </div>
+        
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="absolute inset-0 bg-black/70 flex-col items-center justify-center z-40 hidden">
+            <h2 id="game-over-text" class="text-5xl font-bold text-white mb-4">Game Over</h2>
+            <p id="game-over-subtext" class="text-xl text-gray-300"></p>
+        </div>
+
 
         <!-- Game Screen -->
         <div id="game-screen" class="relative w-full h-full">
@@ -114,6 +121,7 @@
         const chatBox = document.getElementById('chat-box');
         const chatMessages = document.getElementById('chat-messages');
         const cluesText = document.getElementById('clues-text');
+        const statusText = document.getElementById('status-text');
         const localVideo = document.getElementById('local-video');
         const remoteVideosContainer = document.getElementById('remote-videos-container');
         const toggleMicBtn = document.getElementById('toggle-mic-btn');
@@ -122,16 +130,24 @@
         const micOffIcon = document.getElementById('mic-off-icon');
         const camOnIcon = document.getElementById('cam-on-icon');
         const camOffIcon = document.getElementById('cam-off-icon');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gameOverText = document.getElementById('game-over-text');
+        const gameOverSubtext = document.getElementById('game-over-subtext');
 
         // Game State
-        const gameState = { players: {}, maze: [], clues: [] };
+        const gameState = { 
+            players: {}, 
+            maze: [], 
+            clues: [],
+            weapon: { id: 'weapon', x: -1, y: -1, spawnedForTeam: null }
+        };
         let myPlayerId = null;
         let gameChannel = null;
         
         // Maze and Clue Constants
         const MAZE_WIDTH = 25;
         const MAZE_HEIGHT = 20;
-        const NUM_CLUES = 5;
+        const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 5;
         let CELL_SIZE = 32;
 
@@ -164,15 +180,11 @@
             canvas.height = container.clientHeight;
             CELL_SIZE = Math.min(canvas.width / MAZE_WIDTH, canvas.height / MAZE_HEIGHT);
 
-            // Adjust player positions based on new cell size to prevent clipping
             if (oldCellSize !== CELL_SIZE && myPlayerId) {
                 for (const playerId in gameState.players) {
                     const player = gameState.players[playerId];
-                    // Convert pixel coords to grid coords
                     const gridX = player.x / oldCellSize;
                     const gridY = player.y / oldCellSize;
-                    
-                    // Recalculate pixel position based on new cell size
                     player.x = gridX * CELL_SIZE;
                     player.y = gridY * CELL_SIZE;
                 }
@@ -203,16 +215,22 @@
                 x: startPos.x,
                 y: startPos.y,
                 color: `hsl(${Math.random() * 360}, 80%, 70%)`,
-                teamId: myPlayerId
+                teamId: myPlayerId,
+                status: 'alive',
+                isMonster: false, // Will be assigned via presence
+                hasWeapon: false
             };
 
-            setupSupabaseChannels();
+            await setupSupabaseChannels();
             gameLoop();
         }
 
         function gameLoop() {
+            if (gameState.players[myPlayerId]?.status !== 'alive') return; // Stop loop if dead
             updateMyPlayerPosition();
             checkClueCollection();
+            checkWeaponCollection();
+            checkPlayerCollisions();
             drawGame();
             requestAnimationFrame(gameLoop);
         }
@@ -227,10 +245,21 @@
 
             drawMaze();
             drawClues();
-            Object.values(gameState.players).forEach(player => {
+            drawWeapon();
+            Object.values(gameState.players).forEach(drawPlayer);
+        }
+
+        function drawPlayer(player) {
+            ctx.save();
+            if (player.status === 'dead') {
+                ctx.fillStyle = '#6b7280'; // Gray for dead players
+            } else if (player.isMonster) {
+                ctx.fillStyle = '#ef4444'; // Red tint for monster
+            } else {
                 ctx.fillStyle = player.color;
-                ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
-            });
+            }
+            ctx.fillRect(player.x - 5, player.y - 5, 10, 10);
+            ctx.restore();
         }
         
         function drawMaze() {
@@ -264,9 +293,29 @@
                 }
             });
         }
+        
+        function drawWeapon() {
+            const myTeamId = gameState.players[myPlayerId]?.teamId;
+            if (gameState.weapon.spawnedForTeam !== myTeamId) return;
+
+            const x = (gameState.weapon.x + 0.5) * CELL_SIZE;
+            const y = (gameState.weapon.y + 0.5) * CELL_SIZE;
+            const swordSize = CELL_SIZE * 0.4;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(Math.PI / 4); // 45 degrees
+            // Hilt
+            ctx.fillStyle = '#964B00'; // Brown
+            ctx.fillRect(-swordSize * 0.2, -swordSize * 0.1, swordSize * 0.4, swordSize * 0.2);
+            // Blade
+            ctx.fillStyle = '#C0C0C0'; // Silver
+            ctx.fillRect(-swordSize * 0.1, -swordSize, swordSize * 0.2, swordSize);
+            ctx.restore();
+        }
 
         // --- 4. SUPABASE REALTIME ---
-        function setupSupabaseChannels() {
+        async function setupSupabaseChannels() {
              const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
              gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
 
@@ -278,10 +327,54 @@
                         clue.collectedByTeams.push(payload.teamId);
                     }
                 })
+                .on('broadcast', { event: 'weapon_spawn' }, ({ payload }) => {
+                    if (payload.teamId === gameState.players[myPlayerId]?.teamId) {
+                        gameState.weapon.x = payload.x;
+                        gameState.weapon.y = payload.y;
+                        gameState.weapon.spawnedForTeam = payload.teamId;
+                    }
+                })
+                .on('broadcast', { event: 'weapon_collect' }, ({ payload }) => {
+                    if (gameState.players[payload.playerId]) {
+                        gameState.players[payload.playerId].hasWeapon = true;
+                    }
+                    if (gameState.weapon.spawnedForTeam === payload.teamId) {
+                        gameState.weapon.spawnedForTeam = null; // Hide for everyone on the team
+                    }
+                })
+                .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
+                    if (gameState.players[payload.playerId]) {
+                        gameState.players[payload.playerId].status = 'dead';
+                        if (payload.playerId === myPlayerId) {
+                            statusText.textContent = 'Status: Dead';
+                            gameOverText.textContent = 'You Have Died';
+                            gameOverSubtext.textContent = 'The monster got you...';
+                            gameOverScreen.style.display = 'flex';
+                        }
+                    }
+                })
+                .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
+                    gameOverText.textContent = 'Hunters Win!';
+                    gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
+                    gameOverScreen.style.display = 'flex';
+                    // End game for everyone
+                    if (gameChannel) gameChannel.unsubscribe();
+                })
                 .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
+                    const playersInRoom = Object.keys(presenceState);
+                    
+                    // Simple monster assignment: second player is the monster (for testing)
+                    // A real implementation would be more robust (e.g., on game start)
+                    if (playersInRoom.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
+                        const monsterId = playersInRoom[1]; // Get the key of the second user
+                        if(gameState.players[monsterId]) {
+                           gameState.players[monsterId].isMonster = true;
+                        }
+                    }
+
                     for (const id in presenceState) {
                         if (id !== myPlayerId) {
                             const pres = presenceState[id][0];
@@ -291,7 +384,6 @@
                         }
                     }
                 })
-                .on('presence', { event: 'join' }, ({ newPresences }) => { /* Sync handles this */ })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
                     leftPresences.forEach(p => {
                         delete gameState.players[p.player_id];
@@ -313,6 +405,10 @@
         
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
+        function broadcastWeaponSpawn(teamId, x, y) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y } }); }
+        function broadcastWeaponCollect(playerId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_collect', payload: { playerId, teamId } }); }
+        function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
+        function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -323,7 +419,6 @@
         window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
 
         const joystickContainer = document.getElementById('joystick-container');
-        const joystickThumb = document.getElementById('joystick-thumb');
         joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; });
         joystickContainer.addEventListener('touchmove', (e) => {
             if (!joystick.active) return;
@@ -341,7 +436,7 @@
 
         function updateMyPlayerPosition() {
             const player = gameState.players[myPlayerId];
-            if (!player || gameState.maze.length === 0) return;
+            if (!player || player.status !== 'alive' || gameState.maze.length === 0) return;
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
@@ -355,22 +450,11 @@
                 
                 let currentCellX = Math.floor(player.x / CELL_SIZE);
                 let currentCellY = Math.floor(player.y / CELL_SIZE);
-                let nextCellX = Math.floor(nextX / CELL_SIZE);
-                let nextCellY = Math.floor(nextY / CELL_SIZE);
                 
-                // Simplified collision check - you might want more advanced logic
-                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) {
-                    nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
-                }
-                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) {
-                    nextX = currentCellX * CELL_SIZE + playerRadius;
-                }
-                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) {
-                    nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
-                }
-                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) {
-                    nextY = currentCellY * CELL_SIZE + playerRadius;
-                }
+                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
+                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) nextX = currentCellX * CELL_SIZE + playerRadius;
+                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
+                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) nextY = currentCellY * CELL_SIZE + playerRadius;
 
                 player.x = nextX;
                 player.y = nextY;
@@ -378,98 +462,81 @@
             }
         }
         
-        // --- 6. MAZE & CLUE LOGIC ---
+        // --- 6. GAME MECHANICS (MAZE, CLUES, COMBAT) ---
         function generateMaze(width, height) {
             let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
-            let stack = [];
-            let current = maze[0][0];
-            current.visited = true;
-
-            const getNeighbors = (cell) => {
-                let neighbors = [];
-                const {x, y} = cell;
-                if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]);
-                if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]);
-                if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]);
-                if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]);
-                return neighbors;
-            };
-
-            while (true) {
-                let neighbors = getNeighbors(current);
-                if (neighbors.length > 0) {
-                    stack.push(current);
-                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } 
-                    else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } 
-                    else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } 
-                    else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; }
-                    current = next;
-                    current.visited = true;
-                } else if (stack.length > 0) {
-                    current = stack.pop();
-                } else {
-                    break;
-                }
-            }
-
-            // Post-process to open up the maze
-            const removalChance = 0.25; // 25% chance to remove an interior wall
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    // Consider removing the right wall if it's not on the edge
-                    if (x < width - 1 && Math.random() < removalChance) {
-                        maze[y][x].walls.right = false;
-                        maze[y][x + 1].walls.left = false;
-                    }
-                    // Consider removing the bottom wall if it's not on the edge
-                    if (y < height - 1 && Math.random() < removalChance) {
-                        maze[y][x].walls.bottom = false;
-                        maze[y + 1][x].walls.top = false;
-                    }
-                }
-            }
+            let stack = []; let current = maze[0][0]; current.visited = true;
+            const getNeighbors = (cell) => { let neighbors = []; const {x, y} = cell; if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); return neighbors; };
+            while (true) { let neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; } current = next; current.visited = true; } else if (stack.length > 0) { current = stack.pop(); } else { break; } }
+            const removalChance = 0.25;
+            for (let y = 0; y < height; y++) { for (let x = 0; x < width; x++) { if (x < width - 1 && Math.random() < removalChance) { maze[y][x].walls.right = false; maze[y][x + 1].walls.left = false; } if (y < height - 1 && Math.random() < removalChance) { maze[y][x].walls.bottom = false; maze[y + 1][x].walls.top = false; } } }
             return maze;
         }
 
         function placeClues(maze, numClues, minDistance) {
-            let clues = []; 
-            let possibleLocations = []; 
-            for (let y = 0; y < maze.length; y++) { 
-                for (let x = 0; x < maze[0].length; x++) { 
-                    possibleLocations.push({x, y}); 
-                } 
+            let clues = []; let possibleLocations = []; for (let y = 0; y < maze.length; y++) { for (let x = 0; x < maze[0].length; x++) { possibleLocations.push({x, y}); } }
+            for (let i = possibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; }
+            while (clues.length < numClues && possibleLocations.length > 0) { let loc = possibleLocations.pop(); let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); if (!tooClose) { clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); } } return clues;
+        }
+        
+        function spawnWeapon(teamId) {
+            let possibleLocations = [];
+            for (let y = 0; y < gameState.maze.length; y++) {
+                for (let x = 0; x < gameState.maze[0].length; x++) {
+                    possibleLocations.push({x, y});
+                }
             }
-            for (let i = possibleLocations.length - 1; i > 0; i--) { 
-                const j = Math.floor(Math.random() * (i + 1)); 
-                [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; 
-            }
-            while (clues.length < numClues && possibleLocations.length > 0) { 
-                let loc = possibleLocations.pop(); 
-                let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); 
-                if (!tooClose) { 
-                    clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); 
-                } 
-            } 
-            return clues;
+            const loc = possibleLocations[Math.floor(Math.random() * possibleLocations.length)];
+            gameState.weapon = { x: loc.x, y: loc.y, spawnedForTeam: teamId };
+            broadcastWeaponSpawn(teamId, loc.x, loc.y);
         }
 
         function checkClueCollection() {
             const player = gameState.players[myPlayerId]; if(!player) return;
-            const playerCellX = Math.floor(player.x / CELL_SIZE); 
-            const playerCellY = Math.floor(player.y / CELL_SIZE);
-            gameState.clues.forEach(clue => { 
-                if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { 
-                    clue.collectedByTeams.push(player.teamId); 
-                    broadcastClueCollected(clue.id, player.teamId); 
-                    updateClueCounter(); 
-                } 
-            });
+            const playerCellX = Math.floor(player.x / CELL_SIZE); const playerCellY = Math.floor(player.y / CELL_SIZE);
+            gameState.clues.forEach(clue => { if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { clue.collectedByTeams.push(player.teamId); broadcastClueCollected(clue.id, player.teamId); updateClueCounter(); } });
         }
+        
+        function checkWeaponCollection() {
+            const player = gameState.players[myPlayerId];
+            if (!player || player.hasWeapon || gameState.weapon.spawnedForTeam !== player.teamId) return;
+            const playerCellX = Math.floor(player.x / CELL_SIZE);
+            const playerCellY = Math.floor(player.y / CELL_SIZE);
+            if (gameState.weapon.x === playerCellX && gameState.weapon.y === playerCellY) {
+                player.hasWeapon = true;
+                gameState.weapon.spawnedForTeam = null;
+                broadcastWeaponCollect(player.id, player.teamId);
+            }
+        }
+        
+        function checkPlayerCollisions() {
+            const me = gameState.players[myPlayerId];
+            if (!me || me.status !== 'alive') return;
+            
+            for (const otherId in gameState.players) {
+                if (otherId === myPlayerId) continue;
+                const other = gameState.players[otherId];
+                if (other.status !== 'alive') continue;
+
+                const dist = Math.sqrt((me.x - other.x)**2 + (me.y - other.y)**2);
+                if (dist < 10) { // Collision threshold
+                    if (me.hasWeapon && other.isMonster) {
+                        broadcastMonsterKilled(me.username);
+                    }
+                    if (me.isMonster && !other.hasWeapon) {
+                        broadcastPlayerKilled(otherId);
+                    }
+                }
+            }
+        }
+        
         function updateClueCounter() {
             const myTeamId = gameState.players[myPlayerId]?.teamId; if (!myTeamId) return;
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myTeamId)).length;
             cluesText.textContent = `Clues Found: ${collectedCount}/${NUM_CLUES}`;
+            if (collectedCount === NUM_CLUES && !gameState.weapon.spawnedForTeam) {
+                spawnWeapon(myTeamId);
+            }
         }
         
         // --- 7. WEBRTC (VIDEO/AUDIO CHAT) ---
@@ -479,10 +546,7 @@
                 localVideo.srcObject = localStream;
                 localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
                 localStream.getVideoTracks().forEach(track => track.enabled = isCamOn);
-            } catch (error) {
-                console.error("Error accessing media devices.", error);
-                alert("Could not access camera and microphone. Video chat will be disabled.");
-            }
+            } catch (error) { console.error("Error accessing media devices.", error); }
         }
 
         toggleMicBtn.addEventListener('click', () => {
@@ -503,71 +567,41 @@
             toggleCamBtn.classList.toggle('bg-red-600', !isCamOn);
         });
         
-        function sendRtcSignal(to, data) {
-            if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } });
-        }
+        function sendRtcSignal(to, data) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } }); }
 
         function createPeerConnection(peerId, isInitiator) {
             if (peerConnections[peerId]) return;
             peerConnections[peerId] = new RTCPeerConnection(peerConnectionConfig);
-            
-            if (localStream) {
-                localStream.getTracks().forEach(track => peerConnections[peerId].addTrack(track, localStream));
-            }
-
-            peerConnections[peerId].onicecandidate = event => {
-                if (event.candidate) sendRtcSignal(peerId, { ice: event.candidate });
-            };
-
+            if (localStream) localStream.getTracks().forEach(track => peerConnections[peerId].addTrack(track, localStream));
+            peerConnections[peerId].onicecandidate = event => { if (event.candidate) sendRtcSignal(peerId, { ice: event.candidate }); };
             peerConnections[peerId].ontrack = event => {
                 let videoElement = document.getElementById(`video-${peerId}`);
                 if (!videoElement) {
                     remoteVideosContainer.innerHTML = ''; 
                     videoElement = document.createElement('video');
                     videoElement.id = `video-${peerId}`;
-                    videoElement.autoplay = true;
-                    videoElement.playsInline = true;
+                    videoElement.autoplay = true; videoElement.playsInline = true;
                     videoElement.classList.add('w-full', 'h-full', 'object-cover');
                     remoteVideosContainer.appendChild(videoElement);
                 }
                 videoElement.srcObject = event.streams[0];
             };
-
-            if (isInitiator) {
-                peerConnections[peerId].createOffer()
-                    .then(offer => peerConnections[peerId].setLocalDescription(offer))
-                    .then(() => sendRtcSignal(peerId, { sdp: peerConnections[peerId].localDescription }));
-            }
+            if (isInitiator) { peerConnections[peerId].createOffer().then(offer => peerConnections[peerId].setLocalDescription(offer)).then(() => sendRtcSignal(peerId, { sdp: peerConnections[peerId].localDescription })); }
         }
         
         function handleRtcSignal({ from, to, data }) {
             if (to !== myPlayerId) return;
             let pc = peerConnections[from];
             if (!pc) { createPeerConnection(from, false); pc = peerConnections[from]; }
-            
-            if (data.sdp) {
-                pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
-                    .then(() => {
-                        if (data.sdp.type === 'offer') {
-                            pc.createAnswer()
-                                .then(answer => pc.setLocalDescription(answer))
-                                .then(() => sendRtcSignal(from, { sdp: pc.localDescription }));
-                        }
-                    });
-            } else if (data.ice) {
-                pc.addIceCandidate(new RTCIceCandidate(data.ice));
-            }
+            if (data.sdp) { pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => { if (data.sdp.type === 'offer') { pc.createAnswer().then(answer => pc.setLocalDescription(answer)).then(() => sendRtcSignal(from, { sdp: pc.localDescription })); } }); } 
+            else if (data.ice) { pc.addIceCandidate(new RTCIceCandidate(data.ice)); }
         }
         
         // --- 8. CHAT ---
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && chatInput.value.trim() !== '') {
                 if (!gameChannel) return;
-                const message = {
-                    username: gameState.players[myPlayerId]?.username || 'Player',
-                    text: chatInput.value.trim(),
-                    color: gameState.players[myPlayerId]?.color || '#FFFFFF'
-                };
+                const message = { username: gameState.players[myPlayerId]?.username || 'Player', text: chatInput.value.trim(), color: gameState.players[myPlayerId]?.color || '#FFFFFF' };
                 gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: message });
                 displayChatMessage(message);
                 chatInput.value = '';
