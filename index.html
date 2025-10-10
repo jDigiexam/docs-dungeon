@@ -38,7 +38,7 @@
         <div class="flex justify-center space-x-4">
             <button id="toggle-mic-btn" class="p-3 bg-red-600 rounded-full hover:bg-red-500 text-white transition-colors">
                 <svg id="mic-on-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 S0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
                 <svg id="mic-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -155,6 +155,7 @@
 
         function resizeCanvas() {
             const container = document.getElementById('game-container');
+            if (!container) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
             CELL_SIZE = Math.min(canvas.width / MAZE_WIDTH, canvas.height / MAZE_HEIGHT);
@@ -171,7 +172,6 @@
         async function joinGame(username) {
             lobbyScreen.style.display = 'none';
             
-            // Start WebRTC first to get permissions
             await startLocalMedia();
 
             gameState.maze = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
@@ -184,7 +184,7 @@
                 x: startPos.x,
                 y: startPos.y,
                 color: `hsl(${Math.random() * 360}, 80%, 70%)`,
-                teamId: myPlayerId // Placeholder team assignment
+                teamId: myPlayerId
             };
 
             setupSupabaseChannels();
@@ -203,6 +203,10 @@
             if (!ctx) return;
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Guard clause to prevent drawing before maze is generated
+            if (gameState.maze.length === 0) return;
+
             drawMaze();
             drawClues();
             Object.values(gameState.players).forEach(player => {
@@ -212,6 +216,7 @@
         }
         
         function drawMaze() {
+            // Guard clause moved to drawGame
             ctx.strokeStyle = '#374151';
             ctx.lineWidth = 2;
             for (let y = 0; y < MAZE_HEIGHT; y++) {
@@ -229,7 +234,7 @@
 
         function drawClues() {
             const myTeamId = gameState.players[myPlayerId]?.teamId;
-            if (!myTeamId) return;
+            if (!myTeamId || gameState.clues.length === 0) return;
 
             ctx.fillStyle = 'yellow';
             gameState.clues.forEach(clue => {
@@ -263,19 +268,13 @@
                     for (const id in presenceState) {
                         if (id !== myPlayerId) {
                             const pres = presenceState[id][0];
-                            // This is where we initiate WebRTC calls to existing users
                              if (!peerConnections[pres.player_id]) {
                                 createPeerConnection(pres.player_id, true);
                             }
                         }
                     }
                 })
-                .on('presence', { event: 'join' }, ({ newPresences }) => {
-                    newPresences.forEach(p => {
-                       // New user joined, we don't need to do anything here, sync handles it.
-                       // The new user will initiate the call.
-                    });
-                })
+                .on('presence', { event: 'join' }, ({ newPresences }) => { /* Sync handles this */ })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
                     leftPresences.forEach(p => {
                         delete gameState.players[p.player_id];
@@ -325,7 +324,7 @@
 
         function updateMyPlayerPosition() {
             const player = gameState.players[myPlayerId];
-            if (!player) return;
+            if (!player || gameState.maze.length === 0) return;
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
@@ -349,13 +348,13 @@
         }
         
         // --- 6. MAZE & CLUE LOGIC ---
-        function generateMaze(width, height) { /* ... (maze generation code unchanged) ... */
+        function generateMaze(width, height) {
              let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
             let stack = []; let current = maze[0][0]; current.visited = true;
             const getNeighbors = (cell) => { let neighbors = []; const {x, y} = cell; if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); return neighbors; };
             while (true) { let neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; } current = next; current.visited = true; } else if (stack.length > 0) { current = stack.pop(); } else { break; } } return maze;
         }
-        function placeClues(maze, numClues, minDistance) { /* ... (clue placement code unchanged) ... */
+        function placeClues(maze, numClues, minDistance) {
             let clues = []; let possibleLocations = []; for (let y = 0; y < maze.length; y++) { for (let x = 0; x < maze[0].length; x++) { possibleLocations.push({x, y}); } }
             for (let i = possibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; }
             while (clues.length < numClues && possibleLocations.length > 0) { let loc = possibleLocations.pop(); let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); if (!tooClose) { clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); } } return clues;
@@ -376,7 +375,6 @@
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 localVideo.srcObject = localStream;
-                // Start with mic and cam off
                 localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
                 localStream.getVideoTracks().forEach(track => track.enabled = isCamOn);
             } catch (error) {
@@ -404,7 +402,7 @@
         });
         
         function sendRtcSignal(to, data) {
-            gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } });
+            if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } });
         }
 
         function createPeerConnection(peerId, isInitiator) {
@@ -416,15 +414,13 @@
             }
 
             peerConnections[peerId].onicecandidate = event => {
-                if (event.candidate) {
-                    sendRtcSignal(peerId, { ice: event.candidate });
-                }
+                if (event.candidate) sendRtcSignal(peerId, { ice: event.candidate });
             };
 
             peerConnections[peerId].ontrack = event => {
                 let videoElement = document.getElementById(`video-${peerId}`);
                 if (!videoElement) {
-                    remoteVideosContainer.innerHTML = ''; // Clear placeholder
+                    remoteVideosContainer.innerHTML = ''; 
                     videoElement = document.createElement('video');
                     videoElement.id = `video-${peerId}`;
                     videoElement.autoplay = true;
@@ -444,12 +440,8 @@
         
         function handleRtcSignal({ from, to, data }) {
             if (to !== myPlayerId) return;
-
             let pc = peerConnections[from];
-            if (!pc) {
-                createPeerConnection(from, false);
-                pc = peerConnections[from];
-            }
+            if (!pc) { createPeerConnection(from, false); pc = peerConnections[from]; }
             
             if (data.sdp) {
                 pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
@@ -468,13 +460,15 @@
         // --- 8. CHAT ---
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+                // Guard clause for chat
+                if (!gameChannel) return;
                 const message = {
                     username: gameState.players[myPlayerId]?.username || 'Player',
                     text: chatInput.value.trim(),
                     color: gameState.players[myPlayerId]?.color || '#FFFFFF'
                 };
                 gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: message });
-                displayChatMessage(message); // Display my own message immediately
+                displayChatMessage(message);
                 chatInput.value = '';
             }
         });
@@ -489,7 +483,7 @@
             messageEl.appendChild(usernameSpan);
             messageEl.append(document.createTextNode(text));
             chatMessages.appendChild(messageEl);
-            chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
     </script>
 </body>
