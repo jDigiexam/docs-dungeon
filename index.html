@@ -312,38 +312,35 @@
 
             const x = (gameState.weapon.x + 0.5) * CELL_SIZE;
             const y = (gameState.weapon.y + 0.5) * CELL_SIZE;
-            const swordScale = CELL_SIZE * 0.8; // Make it bigger
+            const swordScale = CELL_SIZE * 0.8;
 
             ctx.save();
             ctx.translate(x, y);
-            ctx.rotate(Math.PI / 4); // 45 degrees for classic look
+            ctx.rotate(Math.PI / 4); 
 
             // Hilt (handle)
             ctx.fillStyle = '#654321'; // Brown
-            ctx.fillRect(-swordScale * 0.05, swordScale * 0.4, swordScale * 0.1, swordScale * 0.2); // Handle
+            ctx.fillRect(-swordScale * 0.05, swordScale * 0.2, swordScale * 0.1, swordScale * 0.3);
 
-            // Guard (wings)
+            // Guard
             ctx.fillStyle = '#A0A0A0'; // Grey/silver
-            ctx.fillRect(-swordScale * 0.3, swordScale * 0.3, swordScale * 0.6, swordScale * 0.1); // Guard bar
-            ctx.beginPath(); // Left wing
-            ctx.moveTo(-swordScale * 0.3, swordScale * 0.3);
-            ctx.lineTo(-swordScale * 0.4, swordScale * 0.2);
-            ctx.lineTo(-swordScale * 0.3, swordScale * 0.1);
-            ctx.fill();
-            ctx.beginPath(); // Right wing
-            ctx.moveTo(swordScale * 0.3, swordScale * 0.3);
-            ctx.lineTo(swordScale * 0.4, swordScale * 0.2);
-            ctx.lineTo(swordScale * 0.3, swordScale * 0.1);
-            ctx.fill();
+            ctx.fillRect(-swordScale * 0.2, swordScale * 0.1, swordScale * 0.4, swordScale * 0.1);
 
             // Blade
             ctx.fillStyle = '#ADD8E6'; // Light blue
             ctx.beginPath();
-            ctx.moveTo(-swordScale * 0.05, swordScale * 0.3);
-            ctx.lineTo(swordScale * 0.05, swordScale * 0.3);
-            ctx.lineTo(0, -swordScale * 0.5); // Pointy top
+            ctx.moveTo(-swordScale * 0.07, swordScale * 0.1); // Wider base
+            ctx.lineTo(swordScale * 0.07, swordScale * 0.1);
+            ctx.lineTo(0, -swordScale * 0.6); // Longer blade
             ctx.closePath();
             ctx.fill();
+            
+            // Gem on the hilt
+            ctx.fillStyle = '#FFFF00'; // Yellow gem
+            ctx.beginPath();
+            ctx.arc(0, swordScale * 0.15, swordScale * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+
 
             ctx.restore();
         }
