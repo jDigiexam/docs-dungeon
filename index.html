@@ -165,15 +165,16 @@
             CELL_SIZE = Math.min(canvas.width / MAZE_WIDTH, canvas.height / MAZE_HEIGHT);
 
             // Adjust player positions based on new cell size to prevent clipping
-            if (oldCellSize !== CELL_SIZE) {
+            if (oldCellSize !== CELL_SIZE && myPlayerId) {
                 for (const playerId in gameState.players) {
                     const player = gameState.players[playerId];
-                    const gridX = Math.floor(player.x / oldCellSize);
-                    const gridY = Math.floor(player.y / oldCellSize);
+                    // Convert pixel coords to grid coords
+                    const gridX = player.x / oldCellSize;
+                    const gridY = player.y / oldCellSize;
                     
-                    // Recalculate pixel position based on grid position
-                    player.x = (gridX * CELL_SIZE) + (CELL_SIZE / 2);
-                    player.y = (gridY * CELL_SIZE) + (CELL_SIZE / 2);
+                    // Recalculate pixel position based on new cell size
+                    player.x = gridX * CELL_SIZE;
+                    player.y = gridY * CELL_SIZE;
                 }
             }
             
@@ -222,7 +223,6 @@
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Guard clause to prevent drawing before maze is generated
             if (gameState.maze.length === 0) return;
 
             drawMaze();
@@ -234,7 +234,6 @@
         }
         
         function drawMaze() {
-            // Guard clause moved to drawGame
             ctx.strokeStyle = '#374151';
             ctx.lineWidth = 2;
             for (let y = 0; y < MAZE_HEIGHT; y++) {
@@ -353,12 +352,26 @@
                 let nextX = player.x + normalizedDx;
                 let nextY = player.y + normalizedDy;
                 const playerRadius = 4;
+                
                 let currentCellX = Math.floor(player.x / CELL_SIZE);
                 let currentCellY = Math.floor(player.y / CELL_SIZE);
-                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
-                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) nextX = currentCellX * CELL_SIZE + playerRadius;
-                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
-                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) nextY = currentCellY * CELL_SIZE + playerRadius;
+                let nextCellX = Math.floor(nextX / CELL_SIZE);
+                let nextCellY = Math.floor(nextY / CELL_SIZE);
+                
+                // Simplified collision check - you might want more advanced logic
+                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) {
+                    nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
+                }
+                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) {
+                    nextX = currentCellX * CELL_SIZE + playerRadius;
+                }
+                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) {
+                    nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
+                }
+                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) {
+                    nextY = currentCellY * CELL_SIZE + playerRadius;
+                }
+
                 player.x = nextX;
                 player.y = nextY;
                 broadcastPlayerState();
@@ -367,20 +380,91 @@
         
         // --- 6. MAZE & CLUE LOGIC ---
         function generateMaze(width, height) {
-             let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
-            let stack = []; let current = maze[0][0]; current.visited = true;
-            const getNeighbors = (cell) => { let neighbors = []; const {x, y} = cell; if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); return neighbors; };
-            while (true) { let neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; } current = next; current.visited = true; } else if (stack.length > 0) { current = stack.pop(); } else { break; } } return maze;
+            let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
+            let stack = [];
+            let current = maze[0][0];
+            current.visited = true;
+
+            const getNeighbors = (cell) => {
+                let neighbors = [];
+                const {x, y} = cell;
+                if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]);
+                if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]);
+                if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]);
+                if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]);
+                return neighbors;
+            };
+
+            while (true) {
+                let neighbors = getNeighbors(current);
+                if (neighbors.length > 0) {
+                    stack.push(current);
+                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } 
+                    else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } 
+                    else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } 
+                    else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; }
+                    current = next;
+                    current.visited = true;
+                } else if (stack.length > 0) {
+                    current = stack.pop();
+                } else {
+                    break;
+                }
+            }
+
+            // Post-process to open up the maze
+            const removalChance = 0.25; // 25% chance to remove an interior wall
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    // Consider removing the right wall if it's not on the edge
+                    if (x < width - 1 && Math.random() < removalChance) {
+                        maze[y][x].walls.right = false;
+                        maze[y][x + 1].walls.left = false;
+                    }
+                    // Consider removing the bottom wall if it's not on the edge
+                    if (y < height - 1 && Math.random() < removalChance) {
+                        maze[y][x].walls.bottom = false;
+                        maze[y + 1][x].walls.top = false;
+                    }
+                }
+            }
+            return maze;
         }
+
         function placeClues(maze, numClues, minDistance) {
-            let clues = []; let possibleLocations = []; for (let y = 0; y < maze.length; y++) { for (let x = 0; x < maze[0].length; x++) { possibleLocations.push({x, y}); } }
-            for (let i = possibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; }
-            while (clues.length < numClues && possibleLocations.length > 0) { let loc = possibleLocations.pop(); let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); if (!tooClose) { clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); } } return clues;
+            let clues = []; 
+            let possibleLocations = []; 
+            for (let y = 0; y < maze.length; y++) { 
+                for (let x = 0; x < maze[0].length; x++) { 
+                    possibleLocations.push({x, y}); 
+                } 
+            }
+            for (let i = possibleLocations.length - 1; i > 0; i--) { 
+                const j = Math.floor(Math.random() * (i + 1)); 
+                [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; 
+            }
+            while (clues.length < numClues && possibleLocations.length > 0) { 
+                let loc = possibleLocations.pop(); 
+                let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); 
+                if (!tooClose) { 
+                    clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); 
+                } 
+            } 
+            return clues;
         }
+
         function checkClueCollection() {
             const player = gameState.players[myPlayerId]; if(!player) return;
-            const playerCellX = Math.floor(player.x / CELL_SIZE); const playerCellY = Math.floor(player.y / CELL_SIZE);
-            gameState.clues.forEach(clue => { if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { clue.collectedByTeams.push(player.teamId); broadcastClueCollected(clue.id, player.teamId); updateClueCounter(); } });
+            const playerCellX = Math.floor(player.x / CELL_SIZE); 
+            const playerCellY = Math.floor(player.y / CELL_SIZE);
+            gameState.clues.forEach(clue => { 
+                if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { 
+                    clue.collectedByTeams.push(player.teamId); 
+                    broadcastClueCollected(clue.id, player.teamId); 
+                    updateClueCounter(); 
+                } 
+            });
         }
         function updateClueCounter() {
             const myTeamId = gameState.players[myPlayerId]?.teamId; if (!myTeamId) return;
@@ -478,7 +562,6 @@
         // --- 8. CHAT ---
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && chatInput.value.trim() !== '') {
-                // Guard clause for chat
                 if (!gameChannel) return;
                 const message = {
                     username: gameState.players[myPlayerId]?.username || 'Player',
