@@ -20,6 +20,15 @@
         }
         -ms-overflow-style: none;  /* IE and Edge */
         scrollbar-width: none;  /* Firefox */
+
+        #remote-videos-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white overflow-hidden h-screen flex items-center justify-center">
@@ -53,9 +62,35 @@
             <div class="absolute bottom-0 left-0 p-4 w-full md:w-1/3 max-w-md">
                 <!-- Video Streams -->
                 <div class="flex space-x-2 mb-2">
-                    <video id="local-video" autoplay muted playsinline class="w-1/2 bg-gray-700 rounded-md border-2 border-green-500"></video>
-                    <div id="remote-videos" class="w-1/2 bg-gray-700 rounded-md flex items-center justify-center text-sm">Teammate</div>
+                    <div class="w-1/2 relative">
+                        <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover bg-gray-700 rounded-md border-2 border-gray-500"></video>
+                        <div id="local-video-overlay" class="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-bold">YOU</div>
+                    </div>
+                    <div id="remote-videos-container" class="w-1/2 bg-gray-700 rounded-md flex items-center justify-center text-sm relative overflow-hidden">
+                        <span id="remote-video-placeholder">Teammate</span>
+                    </div>
                 </div>
+
+                 <!-- Video Controls -->
+                <div class="flex justify-center space-x-4 mb-2">
+                    <button id="toggle-mic-btn" class="p-3 bg-red-600 rounded-full hover:bg-red-500 text-white transition-colors">
+                        <svg id="mic-on-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        <svg id="mic-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.586 15.586a7 7 0 01-9.172 0L2 12m13.586 3.586a7 7 0 000-9.172L12 2m3.586 11.586l-3.586-3.586m0 0a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243zM5 12h.01M19 12h.01" />
+                        </svg>
+                    </button>
+                    <button id="toggle-cam-btn" class="p-3 bg-red-600 rounded-full hover:bg-red-500 text-white transition-colors">
+                        <svg id="cam-on-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.55a2 2 0 01.45 2.12l-1.5 4.5A2 2 0 0116.55 18H7.45a2 2 0 01-1.95-2.38l1.5-4.5A2 2 0 019.45 10H15z" />
+                        </svg>
+                        <svg id="cam-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                           <path d="M15 10l4.55a2 2 0 01.45 2.12l-1.5 4.5A2 2 0 0116.55 18H7.45a2 2 0 01-1.95-2.38l1.5-4.5A2 2 0 019.45 10H15z M1 1l22 22" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+
                 <!-- Chat Box -->
                 <div id="chat-box" class="h-24 bg-black/60 rounded-md p-2 overflow-y-auto text-sm mb-2">
                     <div id="chat-messages"></div>
@@ -75,26 +110,13 @@
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
         // --- 1. CONFIGURATION ---
-        const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co'; // IMPORTANT: Add your Supabase Project URL here
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU'; // IMPORTANT: Add your Supabase Anon Key here
+        const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
 
         // --- 2. SUPABASE & REALTIME SETUP ---
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            const loadingText = document.getElementById('loading-text');
-            loadingText.innerText = "Supabase credentials not set!\nPlease update the script block in index.html.";
-            loadingText.style.color = 'red';
-        }
-        
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const GAME_CHANNEL = 'office-mystery-game';
-        const channel = supabase.channel(GAME_CHANNEL, {
-            config: {
-                broadcast: {
-                    self: true, 
-                },
-            },
-        });
-
+        const channel = supabase.channel(GAME_CHANNEL, { config: { broadcast: { self: true } } });
 
         // --- 3. DOM ELEMENTS & GAME STATE ---
         const canvas = document.getElementById('game-canvas');
@@ -105,215 +127,228 @@
         const usernameInput = document.getElementById('username-input');
 
         const gameState = {
-            players: {}, // Store all player data { id, x, y, name, isAlive, ... }
+            players: {},
             clues: [],
             monsterId: null,
         };
+        let myPlayerId = Math.random().toString(36).substring(7);
 
-        let myPlayerId = Math.random().toString(36).substring(7); // Simple unique ID for now
+        // --- 4. WEBRTC & MEDIA ---
+        const localVideo = document.getElementById('local-video');
+        const remoteVideosContainer = document.getElementById('remote-videos-container');
+        const remoteVideoPlaceholder = document.getElementById('remote-video-placeholder');
+        const toggleMicBtn = document.getElementById('toggle-mic-btn');
+        const toggleCamBtn = document.getElementById('toggle-cam-btn');
+        const micOnIcon = document.getElementById('mic-on-icon');
+        const micOffIcon = document.getElementById('mic-off-icon');
+        const camOnIcon = document.getElementById('cam-on-icon');
+        const camOffIcon = document.getElementById('cam-off-icon');
 
-        // --- 4. PLAYER MOVEMENT & CONTROLS ---
+        let localStream = null;
+        let peerConnections = {};
+        let isMicOn = false;
+        let isCamOn = false;
+        const STUN_SERVER = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        async function startMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                // Start with media off
+                localStream.getAudioTracks()[0].enabled = isMicOn;
+                localStream.getVideoTracks()[0].enabled = isCamOn;
+                updateMediaButtonsUI();
+            } catch (error) {
+                console.error("Error accessing media devices.", error);
+                alert("Could not access camera and microphone. Please allow permissions and try again.");
+            }
+        }
+
+        function updateMediaButtonsUI() {
+            micOnIcon.classList.toggle('hidden', !isMicOn);
+            micOffIcon.classList.toggle('hidden', isMicOn);
+            toggleMicBtn.classList.toggle('bg-green-600', isMicOn);
+            toggleMicBtn.classList.toggle('hover:bg-green-500', isMicOn);
+            toggleMicBtn.classList.toggle('bg-red-600', !isMicOn);
+            toggleMicBtn.classList.toggle('hover:bg-red-500', !isMicOn);
+
+            camOnIcon.classList.toggle('hidden', !isCamOn);
+            camOffIcon.classList.toggle('hidden', isCamOn);
+            toggleCamBtn.classList.toggle('bg-green-600', isCamOn);
+            toggleCamBtn.classList.toggle('hover:bg-green-500', isCamOn);
+            toggleCamBtn.classList.toggle('bg-red-600', !isCamOn);
+            toggleCamBtn.classList.toggle('hover:bg-red-500', !isCamOn);
+        }
+
+        toggleMicBtn.addEventListener('click', () => {
+            isMicOn = !isMicOn;
+            if (localStream) localStream.getAudioTracks()[0].enabled = isMicOn;
+            updateMediaButtonsUI();
+        });
+
+        toggleCamBtn.addEventListener('click', () => {
+            isCamOn = !isCamOn;
+            if (localStream) localStream.getVideoTracks()[0].enabled = isCamOn;
+            updateMediaButtonsUI();
+        });
+
+
+        // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { w: false, a: false, s: false, d: false };
         const playerSpeed = 3;
-        const joystick = {
-            active: false,
-            x: 0,
-            y: 0,
-            dx: 0,
-            dy: 0,
-            radius: document.getElementById('joystick-container').offsetWidth / 2,
-        };
-
-        // Keyboard Controls
+        const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: document.getElementById('joystick-container').offsetWidth / 2 };
         window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
         window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
-        // Joystick Controls
         const joystickContainer = document.getElementById('joystick-container');
         const joystickThumb = document.getElementById('joystick-thumb');
-
-        joystickContainer.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            joystick.active = true;
-        });
+        joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; });
         joystickContainer.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (!joystick.active) return;
-            const touch = e.touches[0];
-            const rect = joystickContainer.getBoundingClientRect();
-            joystick.x = touch.clientX - rect.left - joystick.radius;
-            joystick.y = touch.clientY - rect.top - joystick.radius;
-            
+            e.preventDefault(); if (!joystick.active) return; const touch = e.touches[0]; const rect = joystickContainer.getBoundingClientRect();
+            joystick.x = touch.clientX - rect.left - joystick.radius; joystick.y = touch.clientY - rect.top - joystick.radius;
             const mag = Math.sqrt(joystick.x**2 + joystick.y**2);
-            if (mag > joystick.radius) {
-                joystick.x = (joystick.x / mag) * joystick.radius;
-                joystick.y = (joystick.y / mag) * joystick.radius;
-            }
-
-            joystick.dx = joystick.x / joystick.radius;
-            joystick.dy = joystick.y / joystick.radius;
-
+            if (mag > joystick.radius) { joystick.x = (joystick.x / mag) * joystick.radius; joystick.y = (joystick.y / mag) * joystick.radius; }
+            joystick.dx = joystick.x / joystick.radius; joystick.dy = joystick.y / joystick.radius;
             joystickThumb.style.transform = `translate(${joystick.x}px, ${joystick.y}px)`;
         });
-        joystickContainer.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            joystick.active = false;
-            joystick.dx = 0;
-            joystick.dy = 0;
-            joystickThumb.style.transform = `translate(0px, 0px)`;
-        });
+        joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystick.active = false; joystick.dx = 0; joystick.dy = 0; joystickThumb.style.transform = `translate(0px, 0px)`; });
 
         function updateMyPlayerPosition() {
             if (!gameState.players[myPlayerId]) return;
-
-            let dx = 0;
-            let dy = 0;
-
-            // Keyboard input
-            if (keys.w) dy -= 1;
-            if (keys.s) dy += 1;
-            if (keys.a) dx -= 1;
-            if (keys.d) dx += 1;
-            
-            // Joystick input overrides keyboard
-            if (joystick.active) {
-                dx = joystick.dx;
-                dy = joystick.dy;
-            }
-            
+            let dx = joystick.active ? joystick.dx : (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+            let dy = joystick.active ? joystick.dy : (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
-            if(mag > 0) {
-                 const normalizedDx = dx / mag;
-                 const normalizedDy = dy / mag;
-                 gameState.players[myPlayerId].x += normalizedDx * playerSpeed;
-                 gameState.players[myPlayerId].y += normalizedDy * playerSpeed;
+            if (mag > 0) {
+                gameState.players[myPlayerId].x += (dx / mag) * playerSpeed;
+                gameState.players[myPlayerId].y += (dy / mag) * playerSpeed;
             }
-
-            // Clamp position to canvas bounds
             gameState.players[myPlayerId].x = Math.max(10, Math.min(canvas.width - 10, gameState.players[myPlayerId].x));
             gameState.players[myPlayerId].y = Math.max(10, Math.min(canvas.height - 10, gameState.players[myPlayerId].y));
         }
 
-        // --- 5. GAME LOOP ---
+        // --- 6. GAME LOOP ---
         function draw() {
-            // Resize canvas to fit container
-            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-                canvas.width = canvas.clientWidth;
-                canvas.height = canvas.clientHeight;
-            }
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw a simple grid background
-            ctx.strokeStyle = '#374151';
-            for (let i = 0; i < canvas.width; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, canvas.height);
-                ctx.stroke();
-            }
-            for (let i = 0; i < canvas.height; i += 40) {
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(canvas.width, i);
-                ctx.stroke();
-            }
-
-            // Draw all players
+            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#374151';
+            for (let i = 0; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+            for (let i = 0; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
             for (const id in gameState.players) {
-                const player = gameState.players[id];
-                ctx.fillStyle = id === myPlayerId ? 'cyan' : 'red';
-                if (!player.isAlive) {
-                    ctx.fillStyle = 'gray';
-                }
-                ctx.fillRect(player.x - 10, player.y - 10, 20, 20); // Simple square for player
-                
-                ctx.fillStyle = 'white';
-                ctx.textAlign = 'center';
-                ctx.fillText(player.name, player.x, player.y - 15);
+                const p = gameState.players[id]; ctx.fillStyle = id === myPlayerId ? 'cyan' : (p.isAlive ? 'red' : 'gray');
+                ctx.fillRect(p.x - 10, p.y - 10, 20, 20); ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.fillText(p.name, p.x, p.y - 15);
             }
         }
-
-        function update() {
-            if (gameState.players[myPlayerId] && gameState.players[myPlayerId].isAlive) {
-                updateMyPlayerPosition();
-            }
-        }
-
         function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+            if (gameState.players[myPlayerId]?.isAlive) updateMyPlayerPosition();
+            draw(); requestAnimationFrame(gameLoop);
         }
 
-        // --- 6. REALTIME COMMUNICATION ---
+        // --- 7. REALTIME & WEBRTC SIGNALING ---
+        async function createPeerConnection(targetId) {
+            const pc = new RTCPeerConnection(STUN_SERVER);
+            peerConnections[targetId] = pc;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            }
+
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    channel.send({ type: 'broadcast', event: 'webrtc-ice-candidate', payload: { to: targetId, from: myPlayerId, candidate: event.candidate } });
+                }
+            };
+
+            pc.ontrack = event => {
+                remoteVideoPlaceholder.style.display = 'none';
+                let remoteVideo = document.getElementById(`video-${targetId}`);
+                if (!remoteVideo) {
+                    remoteVideo = document.createElement('video');
+                    remoteVideo.id = `video-${targetId}`;
+                    remoteVideo.autoplay = true;
+                    remoteVideo.playsInline = true;
+                    remoteVideosContainer.appendChild(remoteVideo);
+                }
+                remoteVideo.srcObject = event.streams[0];
+            };
+            return pc;
+        }
+
         async function broadcastMyState() {
              if (!gameState.players[myPlayerId]) return;
-             await channel.send({
-                 type: 'broadcast',
-                 event: 'player-update',
-                 payload: {
-                     id: myPlayerId,
-                     data: gameState.players[myPlayerId]
-                 },
-             });
+             await channel.send({ type: 'broadcast', event: 'player-update', payload: { id: myPlayerId, data: gameState.players[myPlayerId] } });
         }
 
         channel
             .on('broadcast', { event: 'player-update' }, ({ payload }) => {
-                 // Don't update your own player from broadcast
-                 if(payload.id === myPlayerId) return;
-
-                 if (!gameState.players[payload.id]) {
-                     console.log(`Player ${payload.data.name} joined!`);
-                 }
+                 if (payload.id === myPlayerId) return;
+                 const isNewPlayer = !gameState.players[payload.id];
                  gameState.players[payload.id] = payload.data;
+                 if (isNewPlayer) { // New player joined, initiate WebRTC
+                     console.log(`New player ${payload.data.name} detected. Creating offer.`);
+                     createPeerConnection(payload.id).then(pc => {
+                         pc.createOffer().then(offer => {
+                             pc.setLocalDescription(offer);
+                             channel.send({ type: 'broadcast', event: 'webrtc-offer', payload: { to: payload.id, from: myPlayerId, offer } });
+                         });
+                     });
+                 }
+            })
+            .on('broadcast', { event: 'webrtc-offer' }, async ({ payload }) => {
+                if (payload.to !== myPlayerId) return;
+                console.log(`Received WebRTC offer from ${payload.from}`);
+                const pc = await createPeerConnection(payload.from);
+                await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                channel.send({ type: 'broadcast', event: 'webrtc-answer', payload: { to: payload.from, from: myPlayerId, answer } });
+            })
+            .on('broadcast', { event: 'webrtc-answer' }, async ({ payload }) => {
+                if (payload.to !== myPlayerId) return;
+                console.log(`Received WebRTC answer from ${payload.from}`);
+                const pc = peerConnections[payload.from];
+                if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+            })
+            .on('broadcast', { event: 'webrtc-ice-candidate' }, ({ payload }) => {
+                if (payload.to !== myPlayerId) return;
+                const pc = peerConnections[payload.from];
+                if (pc && payload.candidate) {
+                    pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+                }
             })
             .on('broadcast', { event: 'player-leave' }, ({ payload }) => {
                  console.log(`Player ${gameState.players[payload.id]?.name} left.`);
                  delete gameState.players[payload.id];
+                 if (peerConnections[payload.id]) {
+                     peerConnections[payload.id].close();
+                     delete peerConnections[payload.id];
+                 }
+                 const remoteVideo = document.getElementById(`video-${payload.id}`);
+                 if (remoteVideo) remoteVideo.remove();
+                 if (Object.keys(peerConnections).length === 0) {
+                     remoteVideoPlaceholder.style.display = 'block';
+                 }
             })
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('Connected to game channel!');
-                    document.getElementById('loading-text').innerText = "Connected! Waiting for lobby...";
                     loadingScreen.classList.add('hidden');
                     lobbyScreen.classList.remove('hidden');
                 }
             });
             
-        // --- 7. INITIALIZATION ---
+        // --- 8. INITIALIZATION ---
         function init() {
-            if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-            
-            joinGameBtn.onclick = () => {
+            joinGameBtn.onclick = async () => {
                 const username = usernameInput.value.trim();
-                if (username.length < 3) {
-                    alert('Please enter a name (at least 3 characters).');
-                    return;
-                }
+                if (username.length < 3) { alert('Please enter a name (at least 3 characters).'); return; }
 
-                // Create my player object
-                gameState.players[myPlayerId] = {
-                    name: username,
-                    x: Math.random() * 500 + 50,
-                    y: Math.random() * 300 + 50,
-                    isAlive: true
-                };
+                await startMedia(); // Get media access before joining
 
+                gameState.players[myPlayerId] = { name: username, x: Math.random() * 500 + 50, y: Math.random() * 300 + 50, isAlive: true };
                 lobbyScreen.classList.add('hidden');
-
-                // Start game loop and broadcasting
                 gameLoop();
-                setInterval(broadcastMyState, 1000 / 30); // Broadcast state 30 times per second
+                setInterval(broadcastMyState, 1000 / 30);
             };
             
-            // Handle player leaving
             window.addEventListener('beforeunload', async () => {
-                await channel.send({
-                     type: 'broadcast',
-                     event: 'player-leave',
-                     payload: { id: myPlayerId },
-                });
+                await channel.send({ type: 'broadcast', event: 'player-leave', payload: { id: myPlayerId } });
                 supabase.removeChannel(channel);
             });
         }
@@ -322,4 +357,3 @@
     </script>
 </body>
 </html>
-
