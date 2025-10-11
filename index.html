@@ -171,15 +171,15 @@
         
         // Game Constants
         const TILE_SIZE = 24;
-        const MAP_WIDTH = 50; 
-        const MAP_HEIGHT = 40;
+        const MAP_WIDTH = 100; 
+        const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
         const PLAYER_SPEED = 3; 
         const MONSTER_SPEED = 3.5;
         const SIGHT_RADIUS = 8;
         const SPRITE_RENDER_SCALE = 2;
-        const CAMERA_ZOOM = 2.0;
+        const CAMERA_ZOOM = 2.5;
 
         // WebRTC State
         let localStream;
@@ -696,8 +696,7 @@
         // --- 6. GAME MECHANICS (LEVELS, CLUES, COMBAT) ---
         function generateLevels() {
             const levels = {};
-            // W=Wall, ' '=Floor, E=Elevator
-            const mapData = {
+            const levelData = {
                 A: {
                     elevators: [{x: 48, y: 5, target: 'B'}, {x: 2, y: 35, target: 'C'}],
                     rooms: [
@@ -724,7 +723,7 @@
                 }
             };
 
-            for (const levelId in mapData) {
+            for (const levelId in levelData) {
                 const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
                 const { rooms } = mapData[levelId];
 
