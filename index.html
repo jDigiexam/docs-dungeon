@@ -125,7 +125,7 @@
     <script type="module">
         // --- 0. SUPABASE & GENERAL SETUP ---
         const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGvUgiwGnKcs7GBnaU';
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -191,61 +191,61 @@
         let isCamOn = false;
         
         // --- SPRITE DEFINITIONS ---
-        // 0:empty, 1:hair, 2:skin, 3:shirt, 4:pants/suit, 5:shoes, 6:tie, 7:glasses, 8:ears, 9:overalls
+        // 0:empty, 1:hair, 2:skin, 3:shirt, 4:pants/suit, 5:shoes, 6:tie, 7:glasses, 8:ears, 9:overalls, 10:briefcase
         const sprites = {
             male_tie: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '6':'tie'},
+                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '6':'tie', '10':'briefcase'},
                 data: [
                     [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,4,3,3,3,4,4,0],[0,4,4,3,6,3,4,4,0],
-                    [0,4,4,3,6,3,4,4,0],[0,0,4,4,4,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
+                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,3,3,3,3,3,4,0],[0,4,3,6,3,3,3,4,0],
+                    [0,4,3,3,6,3,3,4,0],[0,4,3,3,3,3,3,4,0],[0,4,4,4,4,4,4,4,0],[0,0,4,4,0,4,4,0,0],
+                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[10,10,10,5,0,5,5,0,0]
                 ]
             },
             male_tech: {
                 width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '7':'glasses'},
                 data: [
                     [0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],[0,2,7,2,2,2,7,2,0],
-                    [0,2,2,2,2,2,2,2,0],[0,0,3,3,3,3,3,0,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
-                    [0,3,3,3,3,3,3,3,0],[0,0,4,4,4,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
+                    [0,2,2,2,2,2,2,2,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
+                    [0,3,3,3,3,3,3,3,0],[0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
+                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
                 ]
             },
             male_janitor: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '9':'overalls', '5':'shoes'},
+                width: 9, height: 16, map: {'1':'hair', '2':'skin', '9':'overalls', '5':'shoes'},
                 data: [
                     [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[9,9,9,3,3,3,9,9,9],[0,9,9,3,3,3,9,9,0],[0,9,9,3,3,3,9,9,0],
-                    [0,9,9,0,0,0,9,9,0],[0,0,9,9,9,9,9,0,0],[0,0,9,9,0,9,9,0,0],[0,0,9,9,0,9,9,0,0],
+                    [0,2,0,2,2,2,0,2,0],[9,9,9,9,9,9,9,9,9],[0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],
+                    [0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],[0,0,9,9,0,9,9,0,0],
                     [0,0,9,9,0,9,9,0,0],[0,0,9,9,0,9,9,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
                 ]
             },
             female_suit: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes'},
+                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '10':'briefcase'},
                 data: [
                     [0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,4,3,3,3,4,4,0],[0,4,4,3,3,3,4,4,0],
-                    [0,4,4,4,3,4,4,4,0],[0,0,4,4,4,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
+                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,3,3,3,3,3,4,0],[0,4,3,3,3,3,3,4,0],
+                    [0,4,3,3,3,3,3,4,0],[0,4,3,3,3,3,3,4,0],[0,4,4,4,4,4,4,4,0],[0,0,4,4,0,4,4,0,0],
+                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[10,10,10,5,0,5,5,0,0]
                 ]
             },
-            female_glasses: {
+            female_glasses: { // Straight hair, glasses, casual top
                 width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '7':'glasses'},
                 data: [
-                    [0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,7,2,2,2,7,2,0],[0,2,2,2,2,2,2,2,0],[0,0,3,3,3,3,3,0,0],[0,3,3,3,3,3,3,3,0],
-                    [0,3,3,3,3,3,3,3,0],[0,0,4,4,4,4,4,0,0],[0,0,4,4,4,4,4,0,0],[0,0,4,4,4,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
+                    [1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],[1,1,2,2,2,2,2,1,1],[1,1,2,7,2,2,7,2,1],
+                    [1,1,2,2,2,2,2,2,1],[1,1,2,2,2,2,2,2,1],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
+                    [0,3,3,3,3,3,3,3,0],[0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
+                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
                 ]
             },
-            female_catears: {
+            female_catears: { // Ponytail, cat ears
                 width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '8':'ears'},
                 data: [
-                    [8,1,1,0,0,0,1,1,8],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],
+                    [8,1,1,1,1,1,1,1,8],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],
                     [0,1,2,2,2,2,2,1,0],[0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],
-                    [0,0,3,3,3,3,3,0,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
-                    [0,0,4,4,4,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
+                    [0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
+                    [0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
+                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
                 ]
             }
         };
@@ -281,7 +281,8 @@
                 glasses: '#000000',
                 ears: hairColorInput.value,
                 skin: '#f2d5b1',
-                shoes: '#303030'
+                shoes: '#303030',
+                briefcase: '#654321'
             };
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
@@ -322,7 +323,7 @@
                 colors: {
                     hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
                     overalls: shirtColorInput.value, tie: '#b91c1c', glasses: '#000000', ears: hairColorInput.value,
-                    skin: '#f2d5b1', shoes: '#303030'
+                    skin: '#f2d5b1', shoes: '#303030', briefcase: '#654321'
                 }
             };
 
@@ -414,7 +415,7 @@
                     return acc;
                 }, {});
             } else if (player.isMonster) {
-                colors = { hair: '#111827', shirt: '#991b1b', pants: '#1f2937', skin: '#dc2626', shoes: '#000000', tie: '#000000', glasses: '#000', ears: '#111827', overalls: '#991b1b' };
+                colors = { hair: '#111827', shirt: '#991b1b', pants: '#1f2937', skin: '#dc2626', shoes: '#000000', tie: '#000000', glasses: '#000', ears: '#111827', overalls: '#991b1b', briefcase: '#000000' };
             }
             drawPlayerSprite(ctx, spriteDef, colors, player.x, player.y, SPRITE_RENDER_SCALE);
         }
@@ -696,37 +697,38 @@
         // --- 6. GAME MECHANICS (LEVELS, CLUES, COMBAT) ---
         function generateLevels() {
             const levels = {};
-            const levelData = {
+            const mapData = {
                 A: {
-                    elevators: [{x: 48, y: 5, target: 'B'}, {x: 2, y: 35, target: 'C'}],
+                    elevators: [],
                     rooms: [
-                        {x:2, y:2, w:10, h:8}, {x:15, y:2, w:8, h:10}, {x:26, y:2, w:12, h:7},
-                        {x:2, y:12, w:8, h:8}, {x:30, y:15, w:10, h:10}, {x:15, y:25, w:12, h:8},
-                        {x:2, y:25, w:9, h:7}, {x:35, y:28, w:10, h:8}
+                        {x:2, y:2, w:20, h:16}, {x:30, y:2, w:16, h:20}, {x:52, y:2, w:24, h:14},
+                        {x:4, y:24, w:16, h:16}, {x:60, y:30, w:20, h:20}, {x:30, y:50, w:24, h:16},
+                        {x:4, y:50, w:18, h:14}, {x:70, y:56, w:20, h:16}
                     ]
                 },
                 B: {
-                    elevators: [{x:40, y:2, target: 'A'}, {x:2, y:20, target: 'C'}],
+                    elevators: [],
                     rooms: [
-                        {x:2, y:2, w:12, h:8}, {x:18, y:2, w:9, h:9}, {x:30, y:5, w:8, h:10},
-                        {x:5, y:15, w:10, h:10}, {x:20, y:18, w:10, h:8}, {x:35, y:20, w:12, h:10},
-                        {x:2, y:28, w:8, h:8}, {x:15, y:30, w:10, h:7}
+                        {x:2, y:2, w:24, h:16}, {x:36, y:2, w:18, h:18}, {x:60, y:10, w:16, h:20},
+                        {x:10, y:30, w:20, h:20}, {x:40, y:36, w:20, h:16}, {x:70, y:40, w:24, h:20},
+                        {x:4, y:56, w:16, h:16}, {x:30, y:60, w:20, h:14}
                     ]
                 },
                 C: {
-                    elevators: [{x:48, y:38, target: 'A'}, {x:25, y:2, target: 'B'}],
+                    elevators: [],
                     rooms: [
-                         {x:2, y:2, w:10, h:10}, {x:15, y:5, w:8, h:8}, {x:30, y:2, w:12, h:9},
-                         {x:2, y:15, w:8, h:8}, {x:18, y:18, w:10, h:10}, {x:35, y:15, w:10, h:8},
-                         {x:5, y:28, w:12, h:8}, {x:25, y:30, w:10, h:7}
+                         {x:2, y:2, w:20, h:20}, {x:30, y:10, w:16, h:16}, {x:60, y:4, w:24, h:18},
+                         {x:4, y:30, w:16, h:16}, {x:36, y:36, w:20, h:20}, {x:70, y:30, w:20, h:16},
+                         {x:10, y:56, w:24, h:16}, {x:50, y:60, w:20, h:14}
                     ]
                 }
             };
 
-            for (const levelId in levelData) {
+            for (const levelId in mapData) {
                 const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
                 const { rooms } = mapData[levelId];
 
+                // Draw rooms
                 rooms.forEach(room => {
                     for (let ry = room.y; ry < room.y + room.h; ry++) {
                         for (let rx = room.x; rx < room.x + room.w; rx++) {
@@ -735,21 +737,79 @@
                     }
                 });
 
+                // Draw corridors (3 tiles wide)
                 for(let i = 0; i < rooms.length - 1; i++) {
-                    const start = { x: Math.floor(rooms[i].x + rooms[i].w / 2), y: Math.floor(rooms[i].y + rooms[i].h / 2) };
-                    const end = { x: Math.floor(rooms[i+1].x + rooms[i+1].w / 2), y: Math.floor(rooms[i+1].y + rooms[i+1].h / 2) };
+                    const roomA = rooms[i];
+                    const roomB = rooms[i+1];
+
+                    const start = { 
+                        x: Math.floor(roomA.x + roomA.w / 2), 
+                        y: Math.floor(roomA.y + roomA.h / 2) 
+                    };
+                    const end = { 
+                        x: Math.floor(roomB.x + roomB.w / 2), 
+                        y: Math.floor(roomB.y + roomB.h / 2) 
+                    };
                     
+                    // Horizontal corridor segment
                     const h_start = Math.min(start.x, end.x);
                     const h_end = Math.max(start.x, end.x);
-                    for(let x = h_start; x <= h_end; x++) grid[start.y][x] = { type: 'FLOOR' };
+                    for(let x = h_start; x <= h_end; x++) {
+                        for(let dy = -1; dy <= 1; dy++) { // 3 tiles wide
+                            if (grid[start.y + dy] && grid[start.y + dy][x]) {
+                                grid[start.y + dy][x] = { type: 'FLOOR' };
+                            }
+                        }
+                    }
 
+                    // Vertical corridor segment
                     const v_start = Math.min(start.y, end.y);
                     const v_end = Math.max(start.y, end.y);
-                    for(let y = v_start; y <= v_end; y++) grid[y][end.x] = { type: 'FLOOR' };
+                    for(let y = v_start; y <= v_end; y++) {
+                        for(let dx = -1; dx <= 1; dx++) { // 3 tiles wide
+                            if (grid[y] && grid[y][end.x + dx]) {
+                                grid[y][end.x + dx] = { type: 'FLOOR' };
+                            }
+                        }
+                    }
                 }
 
-                mapData[levelId].elevators.forEach(e => {
-                    grid[e.y][e.x] = { type: 'ELEVATOR', targetLevel: e.target };
+                // Place elevators dynamically within rooms
+                const otherLevels = Object.keys(mapData).filter(id => id !== levelId);
+                otherLevels.forEach(targetLevelId => {
+                    const availableRooms = rooms.filter(room => {
+                        // Ensure there's space for the elevator (1x1 tile) within the room
+                        return room.w >= 3 && room.h >= 3;
+                    });
+                    if (availableRooms.length > 0) {
+                        const randomRoom = availableRooms[Math.floor(Math.random() * availableRooms.length)];
+                        
+                        // Pick a random wall location within the room's inner perimeter (not corners)
+                        let elevatorX, elevatorY;
+                        const rand = Math.random();
+                        if (rand < 0.25) { // Top wall
+                            elevatorX = randomRoom.x + 1 + Math.floor(Math.random() * (randomRoom.w - 2));
+                            elevatorY = randomRoom.y;
+                        } else if (rand < 0.5) { // Bottom wall
+                            elevatorX = randomRoom.x + 1 + Math.floor(Math.random() * (randomRoom.w - 2));
+                            elevatorY = randomRoom.y + randomRoom.h - 1;
+                        } else if (rand < 0.75) { // Left wall
+                            elevatorX = randomRoom.x;
+                            elevatorY = randomRoom.y + 1 + Math.floor(Math.random() * (randomRoom.h - 2));
+                        } else { // Right wall
+                            elevatorX = randomRoom.x + randomRoom.w - 1;
+                            elevatorY = randomRoom.y + 1 + Math.floor(Math.random() * (randomRoom.h - 2));
+                        }
+
+                        // Ensure the elevator location is valid and not already occupied
+                        if (grid[elevatorY] && grid[elevatorY][elevatorX] && grid[elevatorY][elevatorX].type === 'FLOOR') {
+                             grid[elevatorY][elevatorX] = { type: 'ELEVATOR', targetLevel: targetLevelId };
+                             mapData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId }); // Store for reference
+                        } else {
+                            console.warn(`Could not place elevator for ${levelId} to ${targetLevelId} at x:${elevatorX}, y:${elevatorY}. Retrying...`);
+                            // This is a simplified retry. For robustness, you might want a loop with a max attempt.
+                        }
+                    }
                 });
                 
                 levels[levelId] = { grid, rooms };
