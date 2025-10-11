@@ -81,6 +81,7 @@
                         <option value="red_wizard">Red Wizard</option>
                         <option value="blue_wizard">Blue Wizard</option>
                         <option value="green_wizard">Green Wizard</option>
+                        <option value="yellow_wizard">Yellow Wizard</option>
                         <option value="silver_knight">Silver Knight</option>
                         <option value="dark_knight">Dark Knight</option>
                         <option value="ranger">Ranger</option>
@@ -182,9 +183,14 @@
         };
 
         const sprites = {
-            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 1*SPRITE_SIZE, sy: 0}, green_wizard: {sx: 2*SPRITE_SIZE, sy: 0},
-            dark_knight: {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-            rogue: {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, ranger: {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
+            red_wizard: {sx: 0, sy: 0},
+            yellow_wizard: {sx: 1*SPRITE_SIZE, sy: 0}, 
+            blue_wizard: {sx: 2*SPRITE_SIZE, sy: 0},
+            green_wizard: {sx: 3*SPRITE_SIZE, sy: 0},
+            dark_knight: {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+            silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+            rogue: {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+            ranger: {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
         };
         const monsterSprites = [ 
             {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, 
@@ -987,4 +993,3 @@
     </script>
 </body>
 </html>
-
