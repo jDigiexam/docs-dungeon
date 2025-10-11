@@ -178,6 +178,7 @@
         const PLAYER_SPEED = 2.5; 
         const MONSTER_SPEED = 2.8;
         const SIGHT_RADIUS = 10;
+        const SPRITE_RENDER_SCALE = 2;
         const CAMERA_ZOOM = 3.0;
 
         // WebRTC State
@@ -375,8 +376,7 @@
         }
 
         function drawPlayerSprite(context, style, colors, centerX, centerY, scale) {
-            // Simplified shape-based drawing
-             const s = scale;
+            const s = scale;
             context.save();
             context.translate(Math.floor(centerX), Math.floor(centerY));
 
@@ -603,7 +603,7 @@
         joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystick.active = false; joystick.dx = 0; joystick.dy = 0; joystickThumb.style.transform = `translate(0px, 0px)`; });
 
         function isColliding(x, y, levelGrid) {
-            const playerSize = SPRITE_RENDER_SCALE * 4; 
+            const playerSize = 8; 
             const gridX1 = Math.floor((x - playerSize) / TILE_SIZE);
             const gridX2 = Math.floor((x + playerSize) / TILE_SIZE);
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
@@ -630,18 +630,15 @@
                 
                 let moved = false;
                 
-                let newX = player.x + moveX;
-                let newY = player.y + moveY;
-
-                // Check X-axis collision
-                if (!isColliding(newX, player.y, currentLevel.grid)) {
-                    player.x = newX;
+                // Move X
+                if (!isColliding(player.x + moveX, player.y, currentLevel.grid)) {
+                    player.x += moveX;
                     moved = true;
                 }
 
-                // Check Y-axis collision
-                if (!isColliding(player.x, newY, currentLevel.grid)) {
-                    player.y = newY;
+                // Move Y
+                if (!isColliding(player.x, player.y + moveY, currentLevel.grid)) {
+                    player.y += moveY;
                     moved = true;
                 }
 
@@ -1015,4 +1012,3 @@
     </script>
 </body>
 </html>
-
