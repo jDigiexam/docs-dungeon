@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>8-Bit Office Mystery</title>
+    <title>8-Bit Dungeon Mystery</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
@@ -65,39 +65,39 @@
         
         <!-- Loading Screen --><div id="loading-screen" class="absolute inset-0 bg-gray-900 flex items-center justify-center z-30">
             <div class="text-center">
-                <h1 class="text-4xl font-bold mb-4">8-Bit Office Mystery</h1>
-                <p>Loading...</p>
+                <h1 class="text-4xl font-bold mb-4">Dungeon Mystery</h1>
+                <p>Loading Assets...</p>
             </div>
         </div>
 
         <!-- Lobby Screen --><div id="lobby-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-20 hidden">
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
-                <h2 class="text-2xl mb-4">Create Your Character</h2>
+                <h2 class="text-2xl mb-4">Create Your Adventurer</h2>
                 
                 <canvas id="lobby-preview-canvas" width="96" height="96" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
         
                 <div class="grid grid-cols-2 gap-4 mb-4 text-left">
                     <div>
-                        <label for="sprite-style-select" class="block text-sm font-medium">Style:</label>
+                        <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
                         <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
-                            <option value="male_tie">Office Worker</option>
-                            <option value="male_tech">Tech Worker</option>
-                            <option value="male_janitor">Janitor</option>
-                            <option value="female_suit">Business Suit</option>
-                            <option value="female_glasses">Casual Blouse</option>
-                            <option value="female_catears">Cat Ears</option>
+                            <option value="knight">Knight</option>
+                            <option value="wizard">Wizard</option>
+                            <option value="rogue">Rogue</option>
+                            <option value="paladin">Paladin</option>
+                            <option value="sorceress">Sorceress</option>
+                            <option value="ranger">Ranger</option>
                         </select>
                     </div>
                     <div>
                         <label for="hair-color-input" class="block text-sm font-medium">Hair Color:</label>
-                        <input type="color" id="hair-color-input" value="#2d2d2d" class="w-full h-8 p-0 border-none rounded bg-gray-600">
+                        <input type="color" id="hair-color-input" value="#964B00" class="w-full h-8 p-0 border-none rounded bg-gray-600">
                     </div>
                     <div>
-                        <label for="shirt-color-input" class="block text-sm font-medium">Shirt/Top Color:</label>
-                        <input type="color" id="shirt-color-input" value="#ffffff" class="w-full h-8 p-0 border-none rounded bg-gray-600">
+                        <label for="shirt-color-input" class="block text-sm font-medium">Tunic Color:</label>
+                        <input type="color" id="shirt-color-input" value="#006400" class="w-full h-8 p-0 border-none rounded bg-gray-600">
                     </div>
                     <div>
-                        <label for="pants-color-input" class="block text-sm font-medium">Pants/Skirt Color:</label>
+                        <label for="pants-color-input" class="block text-sm font-medium">Pants Color:</label>
                         <input type="color" id="pants-color-input" value="#3d3d3d" class="w-full h-8 p-0 border-none rounded bg-gray-600">
                     </div>
                 </div>
@@ -170,16 +170,15 @@
         let gameChannel = null;
         
         // Game Constants
-        const TILE_SIZE = 24;
+        const TILE_SIZE = 16;
         const MAP_WIDTH = 100; 
         const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
-        const PLAYER_SPEED = 3; 
-        const MONSTER_SPEED = 3.5;
-        const SIGHT_RADIUS = 8;
-        const SPRITE_RENDER_SCALE = 2;
-        const CAMERA_ZOOM = 2.5;
+        const PLAYER_SPEED = 2.5; 
+        const MONSTER_SPEED = 2.8;
+        const SIGHT_RADIUS = 10;
+        const CAMERA_ZOOM = 3.0;
 
         // WebRTC State
         let localStream;
@@ -189,16 +188,40 @@
         };
         let isMicOn = false;
         let isCamOn = false;
+
+        // Asset Loading
+        let assetsLoaded = false;
+        const tilesetImage = new Image();
         
+        const tileMap = {
+            FLOOR: [1, 5],
+            WALL_V: [12, 5], // Vertical wall
+            WALL_H: [13, 4], // Horizontal wall
+            WALL_TL: [12, 4], // Top-left corner
+            WALL_TR: [14, 4], // Top-right corner
+            WALL_BL: [12, 6], // Bottom-left corner
+            WALL_BR: [14, 6], // Bottom-right corner
+            WALL_T: [13, 6],  // T-junction (wall below)
+            WALL_B: [13, 5],  // T-junction (wall above)
+            WALL_L: [14, 5],  // T-junction (wall right)
+            WALL_R: [12, 5],  // T-junction (wall left)
+            WALL_CROSS: [13,5],
+            ELEVATOR: [5, 1],
+        };
+
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
         window.onresize = () => resizeCanvas();
 
         function initGame() {
+            tilesetImage.src = 'https://storage.googleapis.com/gemini-prod-us-central1-831e53026344/139260c6-302a-4375-9e65-985c57209355'; // URL for Tiles.png
+            tilesetImage.onload = () => {
+                assetsLoaded = true;
+                loadingScreen.style.display = 'none';
+                lobbyScreen.style.display = 'flex';
+                setupLobby();
+            };
             resizeCanvas();
-            loadingScreen.style.display = 'none';
-            lobbyScreen.style.display = 'flex';
-            setupLobby();
         }
 
         function setupLobby() {
@@ -213,16 +236,9 @@
             const previewCtx = lobbyPreviewCanvas.getContext('2d');
             const style = spriteStyleSelect.value;
             const colors = {
-                hair: hairColorInput.value,
-                shirt: shirtColorInput.value,
-                pants: pantsColorInput.value,
-                overalls: shirtColorInput.value, 
-                tie: '#b91c1c',
-                glasses: '#000000',
-                ears: hairColorInput.value,
-                skin: '#f2d5b1',
-                shoes: '#303030',
-                briefcase: '#654321'
+                hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
+                overalls: shirtColorInput.value, tie: '#b91c1c', glasses: '#000000', ears: hairColorInput.value,
+                skin: '#f2d5b1', shoes: '#303030', briefcase: '#654321'
             };
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
@@ -234,10 +250,11 @@
             if (!container) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
-            drawGame(); 
+            if(assetsLoaded) drawGame(); 
         }
 
         joinGameBtn.addEventListener('click', () => {
+            if (!assetsLoaded) return;
             const username = usernameInput.value.trim() || `Player_${Math.floor(Math.random() * 1000)}`;
             myPlayerId = `player_${Date.now()}`;
             joinGame(username);
@@ -287,7 +304,7 @@
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
-            if (!ctx || !myPlayerId) return;
+            if (!ctx || !myPlayerId || !assetsLoaded) return;
             const myPlayer = gameState.players[myPlayerId];
             if (!myPlayer) return;
             
@@ -298,7 +315,7 @@
             const cameraY = myPlayer.y - (canvas.height / 2 / CAMERA_ZOOM);
             ctx.translate(-cameraX, -cameraY);
 
-            ctx.fillStyle = '#1f2937'; // Floor color
+            ctx.fillStyle = '#111827'; // Dark dungeon background
             ctx.fillRect(Math.floor(cameraX), Math.floor(cameraY), Math.ceil(canvas.width / CAMERA_ZOOM), Math.ceil(canvas.height / CAMERA_ZOOM));
             
             if (!gameState.levels[myPlayer.level]) {
@@ -358,7 +375,8 @@
         }
 
         function drawPlayerSprite(context, style, colors, centerX, centerY, scale) {
-            const s = scale;
+            // Simplified shape-based drawing
+             const s = scale;
             context.save();
             context.translate(Math.floor(centerX), Math.floor(centerY));
 
@@ -374,63 +392,6 @@
             context.fillStyle = colors.hair;
             context.fillRect(Math.floor(-4*s), Math.floor(-11*s), 8*s, 3*s); // Hair base
             
-            // Style details
-            switch(style) {
-                case 'male_tie':
-                    context.fillStyle = colors.pants; // Suit jacket
-                    context.fillRect(Math.floor(-5*s), Math.floor(-4*s), 10*s, 6*s);
-                    context.fillStyle = colors.shirt; // Shirt V
-                    context.beginPath(); context.moveTo(Math.floor(-1*s), Math.floor(-4*s)); context.lineTo(0, Math.floor(-2*s)); context.lineTo(Math.floor(1*s), Math.floor(-4*s)); context.closePath(); context.fill();
-                    context.fillStyle = colors.tie; // Tie
-                    context.fillRect(Math.floor(-1*s), Math.floor(-2*s), 2*s, 5*s);
-                    context.fillStyle = colors.briefcase;
-                    context.fillRect(Math.floor(-8*s), Math.floor(4*s), 4*s, 4*s);
-                    break;
-                case 'male_tech':
-                    context.fillStyle = colors.hair; // Hair fluff
-                    context.fillRect(Math.floor(-2*s), Math.floor(-12*s), 4*s, 1*s);
-                    context.fillStyle = colors.glasses;
-                    context.fillRect(Math.floor(-3*s), Math.floor(-7*s), 2*s, 1*s);
-                    context.fillRect(Math.floor(1*s), Math.floor(-7*s), 2*s, 1*s);
-                    context.fillRect(Math.floor(-1*s), Math.floor(-7*s), 2*s, 1*s);
-                    break;
-                case 'male_janitor':
-                     context.fillStyle = colors.overalls;
-                     context.fillRect(Math.floor(-5*s), Math.floor(-1*s), 10*s, 8*s); // Overalls body
-                     context.fillRect(Math.floor(-5*s), Math.floor(-3*s), 2*s, 4*s); // Strap L
-                     context.fillRect(Math.floor(3*s), Math.floor(-3*s), 2*s, 4*s); // Strap R
-                    break;
-                case 'female_suit':
-                    context.fillStyle = colors.pants; // Suit jacket
-                    context.fillRect(Math.floor(-5*s), Math.floor(-4*s), 10*s, 8*s);
-                     context.fillStyle = colors.shirt; // Shirt V
-                    context.beginPath(); context.moveTo(Math.floor(-1*s), Math.floor(-4*s)); context.lineTo(0, Math.floor(-1*s)); context.lineTo(Math.floor(1*s), Math.floor(-4*s)); context.closePath(); context.fill();
-                    context.fillStyle = colors.briefcase;
-                    context.fillRect(Math.floor(-9*s), Math.floor(2*s), 4*s, 4*s);
-                    break;
-                case 'female_glasses':
-                    context.fillStyle = colors.hair; // Long hair sides
-                    context.fillRect(Math.floor(-5*s), Math.floor(-8*s), 2*s, 8*s);
-                    context.fillRect(Math.floor(3*s), Math.floor(-8*s), 2*s, 8*s);
-                    context.fillStyle = colors.glasses;
-                    context.fillRect(Math.floor(-3*s), Math.floor(-7*s), 2*s, 1*s);
-                    context.fillRect(Math.floor(1*s), Math.floor(-7*s), 2*s, 1*s);
-                    context.fillRect(Math.floor(-1*s), Math.floor(-7*s), 2*s, 1*s);
-                    break;
-                case 'female_catears':
-                     context.fillStyle = colors.hair; // Ponytail
-                     context.fillRect(Math.floor(-1*s), Math.floor(-1*s), 2*s, 4*s);
-                     context.fillStyle = colors.ears;
-                     context.beginPath(); context.moveTo(Math.floor(-4*s), Math.floor(-11*s)); context.lineTo(Math.floor(-2*s), Math.floor(-13*s)); context.lineTo(Math.floor(-1*s), Math.floor(-11*s)); context.closePath(); context.fill();
-                     context.beginPath(); context.moveTo(Math.floor(1*s), Math.floor(-11*s)); context.lineTo(Math.floor(2*s), Math.floor(-13*s)); context.lineTo(Math.floor(4*s), Math.floor(-11*s)); context.closePath(); context.fill();
-                    break;
-            }
-            
-            // Arms
-            context.fillStyle = colors.skin;
-            context.fillRect(Math.floor(-6*s), Math.floor(-3*s), 2*s, 6*s);
-            context.fillRect(Math.floor(4*s), Math.floor(-3*s), 2*s, 6*s);
-
             context.restore();
         }
         
@@ -446,17 +407,17 @@
             for (let y = startY; y < endY; y++) {
                 for (let x = startX; x < endX; x++) {
                     const tile = level.grid[y][x];
+                    if (tile.type === 'FLOOR') continue;
+
                     const xPos = x * TILE_SIZE;
                     const yPos = y * TILE_SIZE;
 
-                    if (tile.type === 'WALL') {
-                        ctx.fillStyle = '#374151';
-                        ctx.fillRect(xPos, yPos, TILE_SIZE, TILE_SIZE);
-                    } else if (tile.type === 'ELEVATOR') {
-                        ctx.fillStyle = '#4f46e5';
-                        ctx.fillRect(xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
+                    ctx.drawImage(tilesetImage, sx * 16, sy * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+
+                     if (tile.type === 'ELEVATOR') {
                         ctx.fillStyle = 'white';
-                        ctx.font = `${TILE_SIZE * 0.6}px monospace`;
+                        ctx.font = `${TILE_SIZE * 0.8}px monospace`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.fillText(tile.targetLevel, xPos + TILE_SIZE / 2, yPos + TILE_SIZE / 2);
@@ -646,8 +607,8 @@
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
             const gridY2 = Math.floor((y + playerSize) / TILE_SIZE);
 
-            return levelGrid[gridY1]?.[gridX1]?.type === 'WALL' || levelGrid[gridY1]?.[gridX2]?.type === 'WALL' ||
-                   levelGrid[gridY2]?.[gridX1]?.type === 'WALL' || levelGrid[gridY2]?.[gridX2]?.type === 'WALL';
+            return levelGrid[gridY1]?.[gridX1]?.type !== 'FLOOR' || levelGrid[gridY1]?.[gridX2]?.type !== 'FLOOR' ||
+                   levelGrid[gridY2]?.[gridX1]?.type !== 'FLOOR' || levelGrid[gridY2]?.[gridX2]?.type !== 'FLOOR';
         }
 
         function updateMyPlayerPosition() {
@@ -766,17 +727,13 @@
                     }
                 }
 
-                // Place elevators dynamically within rooms
+                 // Place elevators dynamically within rooms
                 const otherLevels = Object.keys(levelData).filter(id => id !== levelId);
                 otherLevels.forEach(targetLevelId => {
-                    const availableRooms = rooms.filter(room => {
-                        // Ensure there's space for the elevator (1x1 tile) within the room
-                        return room.w >= 3 && room.h >= 3;
-                    });
+                    const availableRooms = rooms.filter(room => room.w >= 3 && room.h >= 3);
                     if (availableRooms.length > 0) {
-                        const randomRoom = availableRooms[Math.floor(Math.random() * availableRooms.length)];
+                        const randomRoom = availableRooms.splice(Math.floor(Math.random() * availableRooms.length), 1)[0];
                         
-                        // Pick a random wall location within the room's inner perimeter (not corners)
                         let elevatorX, elevatorY;
                         const rand = Math.random();
                         if (rand < 0.25) { // Top wall
@@ -792,14 +749,37 @@
                             elevatorX = randomRoom.x + randomRoom.w - 1;
                             elevatorY = randomRoom.y + 1 + Math.floor(Math.random() * (randomRoom.h - 2));
                         }
-
-                        // Ensure the elevator location is valid and not already occupied
-                        if (grid[elevatorY] && grid[elevatorY][elevatorX] && grid[elevatorY][elevatorX].type === 'FLOOR') {
+                        
+                         if (grid[elevatorY]?.[elevatorX]?.type === 'FLOOR') {
                              grid[elevatorY][elevatorX] = { type: 'ELEVATOR', targetLevel: targetLevelId };
-                             levelData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId }); // Store for reference
+                             levelData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId });
                         }
                     }
                 });
+
+                // Autotile walls
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    for (let x = 0; x < MAP_WIDTH; x++) {
+                        if (grid[y][x].type === 'WALL') {
+                            const isFloor = (nx, ny) => grid[ny]?.[nx]?.type !== 'WALL';
+                            const above = isFloor(x, y-1);
+                            const below = isFloor(x, y+1);
+                            const left = isFloor(x-1, y);
+                            const right = isFloor(x+1, y);
+
+                            if (above && !below && right && !left) grid[y][x].type = 'WALL_TL';
+                            else if (above && !below && !right && left) grid[y][x].type = 'WALL_TR';
+                            else if (!above && below && right && !left) grid[y][x].type = 'WALL_BL';
+                            else if (!above && below && !right && left) grid[y][x].type = 'WALL_BR';
+                            else if (!above && below) grid[y][x].type = 'WALL_B';
+                            else if (above && !below) grid[y][x].type = 'WALL_T';
+                            else if (!left && right) grid[y][x].type = 'WALL_R';
+                            else if (left && !right) grid[y][x].type = 'WALL_L';
+                            else if (above && below) grid[y][x].type = 'WALL_V';
+                            else if (left && right) grid[y][x].type = 'WALL_H';
+                        }
+                    }
+                }
                 
                 levels[levelId] = { grid, rooms };
             }
