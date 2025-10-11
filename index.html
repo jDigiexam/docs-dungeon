@@ -79,12 +79,12 @@
                 <div class="mb-4">
                     <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
                     <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
-                        <option value="male_tie">Office Worker</option>
-                        <option value="male_tech">Tech Worker</option>
-                        <option value="male_janitor">Janitor</option>
-                        <option value="female_suit">Business Suit</option>
-                        <option value="female_glasses">Casual Blouse</option>
-                        <option value="female_catears">Cat Ears</option>
+                        <option value="red_wizard">Red Wizard</option>
+                        <option value="blue_wizard">Blue Wizard</option>
+                        <option value="green_wizard">Green Wizard</option>
+                        <option value="silver_knight">Silver Knight</option>
+                        <option value="dark_knight">Dark Knight</option>
+                        <option value="ranger">Ranger</option>
                     </select>
                 </div>
                 
@@ -236,7 +236,7 @@
             const spriteInfo = sprites[style];
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
-            if (spriteInfo) {
+            if (spriteInfo && assets.chars.complete) {
                  previewCtx.drawImage(
                     assets.chars, 
                     spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE,
@@ -981,4 +981,3 @@
     </script>
 </body>
 </html>
-
