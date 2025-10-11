@@ -171,15 +171,15 @@
         
         // Game Constants
         const TILE_SIZE = 24;
-        const MAP_WIDTH = 100; // In tiles
-        const MAP_HEIGHT = 80; // In tiles
+        const MAP_WIDTH = 50; 
+        const MAP_HEIGHT = 40;
         const NUM_CLUES = 7;
-        const MIN_CLUE_DISTANCE = 10; // In tiles
-        const PLAYER_SPEED = 3; // Pixels per frame
+        const MIN_CLUE_DISTANCE = 10;
+        const PLAYER_SPEED = 3; 
         const MONSTER_SPEED = 3.5;
-        const SIGHT_RADIUS = 8; // In tiles
+        const SIGHT_RADIUS = 8;
         const SPRITE_RENDER_SCALE = 2;
-        const CAMERA_ZOOM = 1.5;
+        const CAMERA_ZOOM = 2.0;
 
         // WebRTC State
         let localStream;
@@ -191,7 +191,7 @@
         let isCamOn = false;
         
         // --- SPRITE DEFINITIONS ---
-        // 0:empty, 1:hair, 2:skin, 3:shirt, 4:pants, 5:shoes, 6:tie, 7:glasses, 8:ears, 9:overalls
+        // 0:empty, 1:hair, 2:skin, 3:shirt, 4:pants/suit, 5:shoes, 6:tie, 7:glasses, 8:ears, 9:overalls
         const sprites = {
             male_tie: {
                 width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '6':'tie'},
@@ -276,10 +276,10 @@
                 hair: hairColorInput.value,
                 shirt: shirtColorInput.value,
                 pants: pantsColorInput.value,
-                overalls: shirtColorInput.value, // Janitor overalls use shirt color
+                overalls: shirtColorInput.value, 
                 tie: '#b91c1c',
                 glasses: '#000000',
-                ears: '#2d2d2d',
+                ears: hairColorInput.value,
                 skin: '#f2d5b1',
                 shoes: '#303030'
             };
@@ -317,7 +317,7 @@
 
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
-                isMonster: false, hasWeapon: false, speed: PLAYER_SPEED,
+                isMonster: false, hasWeapon: false,
                 spriteStyle: spriteStyleSelect.value,
                 colors: {
                     hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
@@ -528,7 +528,6 @@
                 .on('broadcast', { event: 'assign_monster' }, ({ payload }) => {
                     if (gameState.players[payload.playerId]) {
                         gameState.players[payload.playerId].isMonster = true;
-                        gameState.players[payload.playerId].speed = MONSTER_SPEED;
                     }
                 })
                 .on('broadcast', { event: 'clue_update' }, ({ payload }) => {
@@ -648,17 +647,14 @@
         joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystick.active = false; joystick.dx = 0; joystick.dy = 0; joystickThumb.style.transform = `translate(0px, 0px)`; });
 
         function isColliding(x, y, levelGrid) {
-            const playerSize = SPRITE_RENDER_SCALE * 4; // Approx half width of sprite
+            const playerSize = SPRITE_RENDER_SCALE * 4; 
             const gridX1 = Math.floor((x - playerSize) / TILE_SIZE);
             const gridX2 = Math.floor((x + playerSize) / TILE_SIZE);
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
             const gridY2 = Math.floor((y + playerSize) / TILE_SIZE);
 
-            if (levelGrid[gridY1]?.[gridX1]?.type === 'WALL' || levelGrid[gridY1]?.[gridX2]?.type === 'WALL' ||
-                levelGrid[gridY2]?.[gridX1]?.type === 'WALL' || levelGrid[gridY2]?.[gridX2]?.type === 'WALL') {
-                return true;
-            }
-            return false;
+            return levelGrid[gridY1]?.[gridX1]?.type === 'WALL' || levelGrid[gridY1]?.[gridX2]?.type === 'WALL' ||
+                   levelGrid[gridY2]?.[gridX1]?.type === 'WALL' || levelGrid[gridY2]?.[gridX2]?.type === 'WALL';
         }
 
         function updateMyPlayerPosition() {
@@ -678,14 +674,18 @@
                 
                 let moved = false;
                 
-                // Move X
-                if (!isColliding(player.x + moveX, player.y, currentLevel.grid)) {
-                    player.x += moveX;
+                let newX = player.x + moveX;
+                let newY = player.y + moveY;
+
+                // Check X-axis collision
+                if (!isColliding(newX, player.y, currentLevel.grid)) {
+                    player.x = newX;
                     moved = true;
                 }
-                // Move Y
-                if (!isColliding(player.x, player.y + moveY, currentLevel.grid)) {
-                    player.y += moveY;
+
+                // Check Y-axis collision
+                if (!isColliding(player.x, newY, currentLevel.grid)) {
+                    player.y = newY;
                     moved = true;
                 }
 
@@ -696,43 +696,50 @@
         // --- 6. GAME MECHANICS (LEVELS, CLUES, COMBAT) ---
         function generateLevels() {
             const levels = {};
-            const levelData = {
-                A: { elevators: [{x: 28, y: 1, target: 'B'}, {x: 28, y: 78, target: 'C'}] },
-                B: { elevators: [{x: 1, y: 40, target: 'A'}, {x: 50, y: 78, target: 'C'}] },
-                C: { elevators: [{x: 1, y: 1, target: 'A'}, {x: 98, y: 40, target: 'B'}] }
+            // W=Wall, ' '=Floor, E=Elevator
+            const mapData = {
+                A: {
+                    elevators: [{x: 48, y: 5, target: 'B'}, {x: 2, y: 35, target: 'C'}],
+                    rooms: [
+                        {x:2, y:2, w:10, h:8}, {x:15, y:2, w:8, h:10}, {x:26, y:2, w:12, h:7},
+                        {x:2, y:12, w:8, h:8}, {x:30, y:15, w:10, h:10}, {x:15, y:25, w:12, h:8},
+                        {x:2, y:25, w:9, h:7}, {x:35, y:28, w:10, h:8}
+                    ]
+                },
+                B: {
+                    elevators: [{x:40, y:2, target: 'A'}, {x:2, y:20, target: 'C'}],
+                    rooms: [
+                        {x:2, y:2, w:12, h:8}, {x:18, y:2, w:9, h:9}, {x:30, y:5, w:8, h:10},
+                        {x:5, y:15, w:10, h:10}, {x:20, y:18, w:10, h:8}, {x:35, y:20, w:12, h:10},
+                        {x:2, y:28, w:8, h:8}, {x:15, y:30, w:10, h:7}
+                    ]
+                },
+                C: {
+                    elevators: [{x:48, y:38, target: 'A'}, {x:25, y:2, target: 'B'}],
+                    rooms: [
+                         {x:2, y:2, w:10, h:10}, {x:15, y:5, w:8, h:8}, {x:30, y:2, w:12, h:9},
+                         {x:2, y:15, w:8, h:8}, {x:18, y:18, w:10, h:10}, {x:35, y:15, w:10, h:8},
+                         {x:5, y:28, w:12, h:8}, {x:25, y:30, w:10, h:7}
+                    ]
+                }
             };
 
-            for (const levelId in levelData) {
+            for (const levelId in mapData) {
                 const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
-                const rooms = [];
+                const { rooms } = mapData[levelId];
 
-                for(let i = 0; i < 8; i++) {
-                    let room;
-                    let attempts = 0;
-                    do {
-                        const w = Math.floor(Math.random() * 10) + 8; // 8-17 tiles wide
-                        const h = Math.floor(Math.random() * 8) + 6; // 6-13 tiles high
-                        const x = Math.floor(Math.random() * (MAP_WIDTH - w - 2)) + 1;
-                        const y = Math.floor(Math.random() * (MAP_HEIGHT - h - 2)) + 1;
-                        room = { x, y, w, h };
-                        attempts++;
-                    } while (rooms.some(r => room.x < r.x + r.w + 5 && room.x + room.w + 5 > r.x && room.y < r.y + r.h + 5 && room.y + room.h + 5 > r.y) && attempts < 100);
-                    
-                    if (attempts < 100) {
-                        rooms.push(room);
-                        for (let ry = room.y; ry < room.y + room.h; ry++) {
-                            for (let rx = room.x; rx < room.x + room.w; rx++) {
-                                grid[ry][rx] = { type: 'FLOOR' };
-                            }
+                rooms.forEach(room => {
+                    for (let ry = room.y; ry < room.y + room.h; ry++) {
+                        for (let rx = room.x; rx < room.x + room.w; rx++) {
+                            grid[ry][rx] = { type: 'FLOOR' };
                         }
                     }
-                }
+                });
 
                 for(let i = 0; i < rooms.length - 1; i++) {
                     const start = { x: Math.floor(rooms[i].x + rooms[i].w / 2), y: Math.floor(rooms[i].y + rooms[i].h / 2) };
                     const end = { x: Math.floor(rooms[i+1].x + rooms[i+1].w / 2), y: Math.floor(rooms[i+1].y + rooms[i+1].h / 2) };
                     
-                    // L-shaped corridor
                     const h_start = Math.min(start.x, end.x);
                     const h_end = Math.max(start.x, end.x);
                     for(let x = h_start; x <= h_end; x++) grid[start.y][x] = { type: 'FLOOR' };
@@ -742,7 +749,7 @@
                     for(let y = v_start; y <= v_end; y++) grid[y][end.x] = { type: 'FLOOR' };
                 }
 
-                levelData[levelId].elevators.forEach(e => {
+                mapData[levelId].elevators.forEach(e => {
                     grid[e.y][e.x] = { type: 'ELEVATOR', targetLevel: e.target };
                 });
                 
@@ -950,3 +957,4 @@
     </script>
 </body>
 </html>
+
