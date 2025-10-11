@@ -74,7 +74,7 @@
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
                 <h2 class="text-2xl mb-4">Choose Your Hero</h2>
                 
-                <canvas id="lobby-preview-canvas" width="64" height="64" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
+                <canvas id="lobby-preview-canvas" width="128" height="128" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
         
                 <div class="mb-4">
                     <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
@@ -152,15 +152,16 @@
         let gameChannel = null;
         
         // Game Constants
-        const TILE_SIZE = 16;
+        const TILE_SIZE = 48;
+        const SPRITE_SIZE = 128; // The pixel dimension of a single sprite in the spritesheets
         const MAP_WIDTH = 100; 
         const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
-        const PLAYER_SPEED = 2.5; 
-        const MONSTER_SPEED = 2.8;
-        const SIGHT_RADIUS = 10;
-        const CAMERA_ZOOM = 3.0;
+        const PLAYER_SPEED = 3.5; 
+        const MONSTER_SPEED = 4.0;
+        const SIGHT_RADIUS = 8;
+        const CAMERA_ZOOM = 1.5;
 
         // WebRTC State
         let localStream;
@@ -170,7 +171,7 @@
         let isCamOn = false;
 
         // Asset Loading
-        const assets = { tiles: new Image(), chars: new Image(), items: new Image(), monsters: new Image(), scenery: new Image() };
+        const assets = { tiles: new Image(), chars: new Image(), items: new Image(), monsters: new Image(), scenery: new Image(), giants: new Image() };
         let assetsLoadedCount = 0;
         
         const tileMap = {
@@ -181,13 +182,20 @@
         };
 
         const sprites = {
-            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 32, sy: 0}, green_wizard: {sx: 48, sy: 0},
-            dark_knight: {sx: 16, sy: 48}, silver_knight: {sx: 32, sy: 48}, rogue: {sx: 48, sy: 48}, ranger: {sx: 32, sy: 64}
+            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 32*8, sy: 0}, green_wizard: {sx: 48*8, sy: 0},
+            dark_knight: {sx: 16*8, sy: 48*8}, silver_knight: {sx: 32*8, sy: 48*8}, rogue: {sx: 48*8, sy: 48*8}, ranger: {sx: 32*8, sy: 64*8}
         };
-        const monsterSprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 48, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
-        const clueSprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 48, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
-        const weaponSprite = {sx: 32, sy: 16}; // A sword from Items.png
-        const scenerySprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
+        const monsterSprites = [ 
+            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 16*8, sy: 0, sheet: 'monsters'}, {sx: 32*8, sy: 0, sheet: 'monsters'}, 
+            {sx: 48*8, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 16*8, sheet: 'monsters'}, {sx: 16*8, sy: 16*8, sheet: 'monsters'},
+            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 128, sy: 0, sheet: 'giants'}, {sx: 256, sy: 0, sheet: 'giants'}
+        ];
+        const clueSprites = [ 
+            {sx: 0, sy: 0}, {sx: 16*8, sy: 0}, {sx: 32*8, sy: 0}, {sx: 48*8, sy: 0}, 
+            {sx: 0, sy: 16*8}, {sx: 16*8, sy: 16*8} 
+        ];
+        const weaponSprite = {sx: 32*8, sy: 16*8}; 
+        const scenerySprites = [ {sx: 0, sy: 0}, {sx: 16*8, sy: 0}, {sx: 32*8, sy: 0}, {sx: 0, sy: 16*8}, {sx: 16*8, sy: 16*8} ];
 
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
@@ -195,8 +203,8 @@
 
         function initGame() {
             const assetSources = {
-                tiles: 'assets/Tiles.png', chars: 'assets/Chars.png', items: 'assets/Items.png',
-                monsters: 'assets/Monsters.png', scenery: 'assets/Scenery.png'
+                tiles: 'assets/Tiles8x.png', chars: 'assets/Chars8x.png', items: 'assets/Items8x.png',
+                monsters: 'assets/Monsters8x.png', scenery: 'assets/Scenery8x.png', giants: 'assets/Giants8x.png'
             };
             let assetsToLoad = Object.keys(assetSources).length;
 
@@ -229,13 +237,10 @@
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
             if (spriteInfo) {
-                const previewScale = 4;
                  previewCtx.drawImage(
                     assets.chars, 
-                    spriteInfo.sx, spriteInfo.sy, 16, 16,
-                    (lobbyPreviewCanvas.width - 16 * previewScale) / 2, 
-                    (lobbyPreviewCanvas.height - 16 * previewScale) / 2,
-                    16 * previewScale, 16 * previewScale
+                    spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE,
+                    0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height
                 );
             }
         }
@@ -299,6 +304,7 @@
             if (!myPlayer) return;
             
             ctx.save();
+            ctx.imageSmoothingEnabled = false; // Preserve pixel art style
             ctx.scale(CAMERA_ZOOM, CAMERA_ZOOM);
 
             const cameraX = myPlayer.x - (canvas.width / 2 / CAMERA_ZOOM);
@@ -345,15 +351,17 @@
         
         function drawPlayer(player) {
             let spriteInfo;
-            let spritesheet = assets.chars;
+            let spritesheet;
 
             if (player.isMonster) {
-                spriteInfo = monsterSprites[player.monsterSpriteIndex];
-                spritesheet = assets.monsters;
+                const monster = monsterSprites[player.monsterSpriteIndex];
+                spriteInfo = {sx: monster.sx, sy: monster.sy};
+                spritesheet = assets[monster.sheet];
             } else {
                  spriteInfo = sprites[player.spriteStyle];
+                 spritesheet = assets.chars;
             }
-            if (!spriteInfo) return;
+            if (!spriteInfo || !spritesheet) return;
 
             ctx.save();
 
@@ -363,8 +371,8 @@
             
             ctx.drawImage(
                 spritesheet,
-                spriteInfo.sx, spriteInfo.sy, 16, 16,
-                Math.floor(player.x - TILE_SIZE / 2), Math.floor(player.y - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE
+                spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE,
+                Math.floor(player.x - TILE_SIZE), Math.floor(player.y - TILE_SIZE), TILE_SIZE*2, TILE_SIZE*2
             );
 
             ctx.restore();
@@ -385,11 +393,11 @@
                     const xPos = x * TILE_SIZE;
                     const yPos = y * TILE_SIZE;
                     
-                    ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * 16, tileMap.FLOOR[1] * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * SPRITE_SIZE, tileMap.FLOOR[1] * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
                     
                     if (tile.type !== 'FLOOR') {
                         let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
-                        ctx.drawImage(assets.tiles, sx * 16, sy * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                        ctx.drawImage(assets.tiles, sx * SPRITE_SIZE, sy * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
 
                         if (tile.type === 'ELEVATOR') {
                             ctx.fillStyle = 'white';
@@ -400,7 +408,7 @@
                         }
                     }
                     if (tile.scenery) {
-                         ctx.drawImage(assets.scenery, tile.scenery.sx, tile.scenery.sy, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                         ctx.drawImage(assets.scenery, tile.scenery.sx, tile.scenery.sy, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
                     }
                 }
             }
@@ -414,7 +422,7 @@
                 if (clue.level === levelId && !clue.collectedByTeams.includes(myTeamId)) {
                     const spriteInfo = clueSprites[clue.spriteIndex];
                     if (spriteInfo) {
-                         ctx.drawImage(assets.items, spriteInfo.sx, spriteInfo.sy, 16, 16, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                         ctx.drawImage(assets.items, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                     }
                 }
             });
@@ -424,7 +432,7 @@
             const myTeamId = gameState.players[myPlayerId]?.teamId;
             if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
 
-            ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, 16, 16, gameState.weapon.x * TILE_SIZE, gameState.weapon.y * TILE_SIZE, TILE_SIZE * 1.5, TILE_SIZE * 1.5);
+            ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, gameState.weapon.x * TILE_SIZE, gameState.weapon.y * TILE_SIZE, TILE_SIZE * 1.5, TILE_SIZE * 1.5);
         }
 
         // --- 4. SUPABASE REALTIME ---
