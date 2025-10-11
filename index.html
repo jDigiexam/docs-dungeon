@@ -160,7 +160,7 @@
         const PLAYER_SPEED = 10; 
         const MONSTER_SPEED = 11;
         const SIGHT_RADIUS = 8;
-        const CAMERA_ZOOM = 0.75;
+        const CAMERA_ZOOM = 0.5;
 
         // WebRTC State
         let localStream;
@@ -192,8 +192,8 @@
             {sx: 0, sy: 0, sheet: 'giants'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'giants'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'giants'}
         ];
         const clueSprites = [ 
-            {sx: 2*SPRITE_SIZE, sy: 0}, {sx: 3*SPRITE_SIZE, sy: 0}, {sx: 0, sy: 1*SPRITE_SIZE}, 
-            {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 0, sy: 5*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 5*SPRITE_SIZE} 
+            {sx: 3*SPRITE_SIZE, sy: 0}, {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, 
+            {sx: 0, sy: 5*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 5*SPRITE_SIZE}, {sx: 2*SPRITE_SIZE, sy: 5*SPRITE_SIZE} 
         ];
         const weaponSprite = {sx: 3*SPRITE_SIZE, sy: 1*SPRITE_SIZE}; 
         const scenerySprites = [ {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 2*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 4*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 0, sy: 2*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 2*SPRITE_SIZE} ];
@@ -730,7 +730,7 @@
                 for (let y = 0; y < MAP_HEIGHT; y++) {
                     for (let x = 0; x < MAP_WIDTH; x++) {
                         if (grid[y][x].type === 'WALL') {
-                            const isFloor = (nx, ny) => grid[ny]?.[nx]?.type !== 'WALL';
+                            const isFloor = (nx, ny) => grid[ny]?.[nx]?.type === 'FLOOR';
                             const above = isFloor(x, y-1);
                             const below = isFloor(x, y+1);
                             const left = isFloor(x-1, y);
