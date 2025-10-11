@@ -165,18 +165,13 @@
         // WebRTC State
         let localStream;
         let peerConnections = {};
-        const peerConnectionConfig = {
-            'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]
-        };
+        const peerConnectionConfig = { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] };
         let isMicOn = false;
         let isCamOn = false;
 
         // Asset Loading
-        const assets = {
-            tiles: new Image(),
-            chars: new Image()
-        };
-        let assetsLoaded = 0;
+        const assets = { tiles: new Image(), chars: new Image(), items: new Image(), monsters: new Image(), scenery: new Image() };
+        let assetsLoadedCount = 0;
         
         const tileMap = {
             FLOOR: [1, 5], WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
@@ -186,27 +181,13 @@
         };
 
         const sprites = {
-            red_wizard: {sx: 0, sy: 0},
-            orange_wizard: {sx: 16, sy: 0},
-            blue_wizard: {sx: 32, sy: 0},
-            green_wizard: {sx: 48, sy: 0},
-            dark_wizard: {sx: 0, sy: 16},
-            pink_wizard: {sx: 16, sy: 16},
-            grey_wizard: {sx: 32, sy: 16},
-            fire_wizard: {sx: 48, sy: 16},
-            green_hat_wizard: {sx: 0, sy: 32},
-            light_blue_wizard: {sx: 16, sy: 32},
-            white_wizard: {sx: 32, sy: 32},
-            yellow_wizard: {sx: 48, sy: 32},
-            brown_wizard: {sx: 0, sy: 48},
-            dark_knight: {sx: 16, sy: 48},
-            silver_knight: {sx: 32, sy: 48},
-            rogue: {sx: 48, sy: 48},
-            white_cat: {sx: 0, sy: 64},
-            bear: {sx: 16, sy: 64},
-            ranger: {sx: 32, sy: 64},
-            monster: {sx: 16, sy: 64} // Using bear as monster for now
+            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 32, sy: 0}, green_wizard: {sx: 48, sy: 0},
+            dark_knight: {sx: 16, sy: 48}, silver_knight: {sx: 32, sy: 48}, rogue: {sx: 48, sy: 48}, ranger: {sx: 32, sy: 64}
         };
+        const monsterSprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 48, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
+        const clueSprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 48, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
+        const weaponSprite = {sx: 32, sy: 16}; // A sword from Items.png
+        const scenerySprites = [ {sx: 0, sy: 0}, {sx: 16, sy: 0}, {sx: 32, sy: 0}, {sx: 0, sy: 16}, {sx: 16, sy: 16} ];
 
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
@@ -214,14 +195,14 @@
 
         function initGame() {
             const assetSources = {
-                tiles: 'assets/Tiles.png',
-                chars: 'assets/Chars.png'
+                tiles: 'assets/Tiles.png', chars: 'assets/Chars.png', items: 'assets/Items.png',
+                monsters: 'assets/Monsters.png', scenery: 'assets/Scenery.png'
             };
             let assetsToLoad = Object.keys(assetSources).length;
 
             function assetLoaded() {
-                assetsLoaded++;
-                if (assetsLoaded === assetsToLoad) {
+                assetsLoadedCount++;
+                if (assetsLoadedCount === assetsToLoad) {
                     loadingScreen.style.display = 'none';
                     lobbyScreen.style.display = 'flex';
                     setupLobby();
@@ -264,11 +245,11 @@
             if (!container) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
-            if(assetsLoaded) drawGame(); 
+            if(assetsLoadedCount > 0) drawGame(); 
         }
 
         joinGameBtn.addEventListener('click', () => {
-            if (!assetsLoaded) return;
+            if (assetsLoadedCount < Object.keys(assets).length) return;
             const username = usernameInput.value.trim() || `Player_${Math.floor(Math.random() * 1000)}`;
             myPlayerId = `player_${Date.now()}`;
             joinGame(username);
@@ -290,7 +271,7 @@
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
                 isMonster: false, hasWeapon: false, lastElevatorUse: 0,
-                spriteStyle: spriteStyleSelect.value,
+                spriteStyle: spriteStyleSelect.value
             };
 
             await setupSupabaseChannels();
@@ -313,7 +294,7 @@
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
-            if (!ctx || !myPlayerId || !assetsLoaded) return;
+            if (!ctx || !myPlayerId || assetsLoadedCount < Object.keys(assets).length) return;
             const myPlayer = gameState.players[myPlayerId];
             if (!myPlayer) return;
             
@@ -363,9 +344,14 @@
         }
         
         function drawPlayer(player) {
-            let spriteInfo = sprites[player.spriteStyle];
+            let spriteInfo;
+            let spritesheet = assets.chars;
+
             if (player.isMonster) {
-                spriteInfo = sprites.monster;
+                spriteInfo = monsterSprites[player.monsterSpriteIndex];
+                spritesheet = assets.monsters;
+            } else {
+                 spriteInfo = sprites[player.spriteStyle];
             }
             if (!spriteInfo) return;
 
@@ -376,7 +362,7 @@
             }
             
             ctx.drawImage(
-                assets.chars,
+                spritesheet,
                 spriteInfo.sx, spriteInfo.sy, 16, 16,
                 Math.floor(player.x - TILE_SIZE / 2), Math.floor(player.y - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE
             );
@@ -398,10 +384,10 @@
                     const tile = level.grid[y][x];
                     const xPos = x * TILE_SIZE;
                     const yPos = y * TILE_SIZE;
-
-                    if (tile.type === 'FLOOR') {
-                         ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * 16, tileMap.FLOOR[1] * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
-                    } else {
+                    
+                    ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * 16, tileMap.FLOOR[1] * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    
+                    if (tile.type !== 'FLOOR') {
                         let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
                         ctx.drawImage(assets.tiles, sx * 16, sy * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
 
@@ -413,6 +399,9 @@
                             ctx.fillText(tile.targetLevel, xPos + TILE_SIZE / 2, yPos + TILE_SIZE / 2);
                         }
                     }
+                    if (tile.scenery) {
+                         ctx.drawImage(assets.scenery, tile.scenery.sx, tile.scenery.sy, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    }
                 }
             }
         }
@@ -421,14 +410,12 @@
             const myTeamId = gameState.players[myPlayerId]?.teamId;
             if (!myTeamId) return;
 
-            ctx.fillStyle = 'yellow';
             gameState.clues.forEach(clue => {
                 if (clue.level === levelId && !clue.collectedByTeams.includes(myTeamId)) {
-                    const xPos = (clue.x + 0.5) * TILE_SIZE;
-                    const yPos = (clue.y + 0.5) * TILE_SIZE;
-                    ctx.beginPath();
-                    ctx.arc(xPos, yPos, TILE_SIZE * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
+                    const spriteInfo = clueSprites[clue.spriteIndex];
+                    if (spriteInfo) {
+                         ctx.drawImage(assets.items, spriteInfo.sx, spriteInfo.sy, 16, 16, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
                 }
             });
         }
@@ -437,30 +424,7 @@
             const myTeamId = gameState.players[myPlayerId]?.teamId;
             if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
 
-            const x = (gameState.weapon.x + 0.5) * TILE_SIZE;
-            const y = (gameState.weapon.y + 0.5) * TILE_SIZE;
-            const swordScale = TILE_SIZE * 1.2;
-
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(Math.PI / 4); 
-
-            ctx.fillStyle = '#654321';
-            ctx.fillRect(-swordScale * 0.05, swordScale * 0.2, swordScale * 0.1, swordScale * 0.3);
-            ctx.fillStyle = '#A0A0A0';
-            ctx.fillRect(-swordScale * 0.2, swordScale * 0.1, swordScale * 0.4, swordScale * 0.1);
-            ctx.fillStyle = '#ADD8E6';
-            ctx.beginPath();
-            ctx.moveTo(-swordScale * 0.07, swordScale * 0.1);
-            ctx.lineTo(swordScale * 0.07, swordScale * 0.1);
-            ctx.lineTo(0, -swordScale * 0.6);
-            ctx.closePath();
-            ctx.fill();
-            ctx.fillStyle = '#FFFF00';
-            ctx.beginPath();
-            ctx.arc(0, swordScale * 0.15, swordScale * 0.05, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, 16, 16, gameState.weapon.x * TILE_SIZE, gameState.weapon.y * TILE_SIZE, TILE_SIZE * 1.5, TILE_SIZE * 1.5);
         }
 
         // --- 4. SUPABASE REALTIME ---
@@ -473,6 +437,7 @@
                 .on('broadcast', { event: 'assign_monster' }, ({ payload }) => {
                     if (gameState.players[payload.playerId]) {
                         gameState.players[payload.playerId].isMonster = true;
+                        gameState.players[payload.playerId].monsterSpriteIndex = payload.monsterSpriteIndex;
                     }
                 })
                 .on('broadcast', { event: 'clue_update' }, ({ payload }) => {
@@ -527,9 +492,10 @@
                     const presenceState = gameChannel.presenceState();
                     const presences = Object.keys(presenceState).sort();
                     if (presences.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
-                        if (myPlayerId === presenceState[presences[0]][0].player_id) { // Only the first player assigns monster
+                        if (myPlayerId === presenceState[presences[0]][0].player_id) { 
                             const monsterId = presenceState[presences[1]][0].player_id;
-                            broadcastAssignMonster(monsterId);
+                            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
+                            broadcastAssignMonster(monsterId, monsterSpriteIndex);
                         }
                     }
                     for (const id in presenceState) {
@@ -564,7 +530,7 @@
         function broadcastWeaponCollect(playerId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_collect', payload: { playerId, teamId } }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
-        function broadcastAssignMonster(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'assign_monster', payload: { playerId } }); }
+        function broadcastAssignMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'assign_monster', payload: { playerId, monsterSpriteIndex } }); }
         function broadcastMonsterWins() { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_wins', payload: {} }); }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
@@ -799,7 +765,10 @@
                 let loc = allPossibleLocations.pop();
                 let tooCloseOnSameLevel = clues.some(clue => clue.level === loc.level && Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
                 if (!tooCloseOnSameLevel) {
-                    clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: [] });
+                    clues.push({ 
+                        id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: [],
+                        spriteIndex: Math.floor(Math.random() * clueSprites.length)
+                    });
                 }
             }
             return clues;
