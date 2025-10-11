@@ -420,7 +420,7 @@
 
             gameState.clues.forEach(clue => {
                 if (clue.level === levelId && !clue.collectedByTeams.includes(myTeamId)) {
-                    ctx.drawImage(assets.items, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.drawImage(assets.scenery, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
             });
         }
