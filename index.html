@@ -250,15 +250,14 @@
 
             ctx.save();
             ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.globalCompositeOperation = 'destination-out';
-            
             ctx.beginPath();
-            ctx.arc(me.x, me.y, SIGHT_RADIUS * CELL_SIZE, 0, Math.PI * 2);
+            // Create a path for the outer rectangle (the fog)
+            ctx.rect(0, 0, canvas.width, canvas.height);
+            // Create a path for the inner circle (the viewport), winding it counter-clockwise
+            // which effectively makes it a "hole" when filled.
+            ctx.arc(me.x, me.y, SIGHT_RADIUS * CELL_SIZE, 0, Math.PI * 2, true); 
             ctx.fill();
-            
-            ctx.restore(); // Resets globalCompositeOperation to 'source-over'
+            ctx.restore();
         }
 
         function drawPlayer(player) {
