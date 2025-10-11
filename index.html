@@ -125,7 +125,7 @@
     <script type="module">
         // --- 0. SUPABASE & GENERAL SETUP ---
         const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGvUgiwGnKcs7GBnaU';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -258,7 +258,7 @@
 
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
-                isMonster: false, hasWeapon: false,
+                isMonster: false, hasWeapon: false, lastElevatorUse: 0,
                 spriteStyle: spriteStyleSelect.value,
                 colors: {
                     hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
@@ -299,7 +299,7 @@
             ctx.translate(-cameraX, -cameraY);
 
             ctx.fillStyle = '#1f2937'; // Floor color
-            ctx.fillRect(cameraX, cameraY, canvas.width / CAMERA_ZOOM, canvas.height / CAMERA_ZOOM);
+            ctx.fillRect(Math.floor(cameraX), Math.floor(cameraY), Math.ceil(canvas.width / CAMERA_ZOOM), Math.ceil(canvas.height / CAMERA_ZOOM));
             
             if (!gameState.levels[myPlayer.level]) {
                  ctx.restore();
@@ -360,76 +360,76 @@
         function drawPlayerSprite(context, style, colors, centerX, centerY, scale) {
             const s = scale;
             context.save();
-            context.translate(centerX, centerY);
+            context.translate(Math.floor(centerX), Math.floor(centerY));
 
             // Body
             context.fillStyle = colors.pants;
-            context.fillRect(-3*s, 3*s, 6*s, 4*s); // Legs
+            context.fillRect(Math.floor(-3*s), Math.floor(3*s), 6*s, 4*s); // Legs
             context.fillStyle = colors.shirt;
-            context.fillRect(-4*s, -4*s, 8*s, 7*s); // Torso
+            context.fillRect(Math.floor(-4*s), Math.floor(-4*s), 8*s, 7*s); // Torso
 
             // Head
             context.fillStyle = colors.skin;
-            context.fillRect(-3*s, -9*s, 6*s, 6*s);
+            context.fillRect(Math.floor(-3*s), Math.floor(-9*s), 6*s, 6*s);
             context.fillStyle = colors.hair;
-            context.fillRect(-4*s, -11*s, 8*s, 3*s); // Hair base
+            context.fillRect(Math.floor(-4*s), Math.floor(-11*s), 8*s, 3*s); // Hair base
             
             // Style details
             switch(style) {
                 case 'male_tie':
                     context.fillStyle = colors.pants; // Suit jacket
-                    context.fillRect(-5*s, -4*s, 10*s, 6*s);
+                    context.fillRect(Math.floor(-5*s), Math.floor(-4*s), 10*s, 6*s);
                     context.fillStyle = colors.shirt; // Shirt V
-                    context.beginPath(); context.moveTo(-1*s, -4*s); context.lineTo(0, -2*s); context.lineTo(1*s, -4*s); context.closePath(); context.fill();
+                    context.beginPath(); context.moveTo(Math.floor(-1*s), Math.floor(-4*s)); context.lineTo(0, Math.floor(-2*s)); context.lineTo(Math.floor(1*s), Math.floor(-4*s)); context.closePath(); context.fill();
                     context.fillStyle = colors.tie; // Tie
-                    context.fillRect(-1*s, -2*s, 2*s, 5*s);
+                    context.fillRect(Math.floor(-1*s), Math.floor(-2*s), 2*s, 5*s);
                     context.fillStyle = colors.briefcase;
-                    context.fillRect(-8*s, 4*s, 4*s, 4*s);
+                    context.fillRect(Math.floor(-8*s), Math.floor(4*s), 4*s, 4*s);
                     break;
                 case 'male_tech':
                     context.fillStyle = colors.hair; // Hair fluff
-                    context.fillRect(-2*s, -12*s, 4*s, 1*s);
+                    context.fillRect(Math.floor(-2*s), Math.floor(-12*s), 4*s, 1*s);
                     context.fillStyle = colors.glasses;
-                    context.fillRect(-3*s, -7*s, 2*s, 1*s);
-                    context.fillRect(1*s, -7*s, 2*s, 1*s);
-                    context.fillRect(-1*s, -7*s, 2*s, 1*s);
+                    context.fillRect(Math.floor(-3*s), Math.floor(-7*s), 2*s, 1*s);
+                    context.fillRect(Math.floor(1*s), Math.floor(-7*s), 2*s, 1*s);
+                    context.fillRect(Math.floor(-1*s), Math.floor(-7*s), 2*s, 1*s);
                     break;
                 case 'male_janitor':
                      context.fillStyle = colors.overalls;
-                     context.fillRect(-5*s, -1*s, 10*s, 8*s); // Overalls body
-                     context.fillRect(-5*s, -3*s, 2*s, 4*s); // Strap L
-                     context.fillRect(3*s, -3*s, 2*s, 4*s); // Strap R
+                     context.fillRect(Math.floor(-5*s), Math.floor(-1*s), 10*s, 8*s); // Overalls body
+                     context.fillRect(Math.floor(-5*s), Math.floor(-3*s), 2*s, 4*s); // Strap L
+                     context.fillRect(Math.floor(3*s), Math.floor(-3*s), 2*s, 4*s); // Strap R
                     break;
                 case 'female_suit':
                     context.fillStyle = colors.pants; // Suit jacket
-                    context.fillRect(-5*s, -4*s, 10*s, 8*s);
+                    context.fillRect(Math.floor(-5*s), Math.floor(-4*s), 10*s, 8*s);
                      context.fillStyle = colors.shirt; // Shirt V
-                    context.beginPath(); context.moveTo(-1*s, -4*s); context.lineTo(0, -1*s); context.lineTo(1*s, -4*s); context.closePath(); context.fill();
+                    context.beginPath(); context.moveTo(Math.floor(-1*s), Math.floor(-4*s)); context.lineTo(0, Math.floor(-1*s)); context.lineTo(Math.floor(1*s), Math.floor(-4*s)); context.closePath(); context.fill();
                     context.fillStyle = colors.briefcase;
-                    context.fillRect(-9*s, 2*s, 4*s, 4*s);
+                    context.fillRect(Math.floor(-9*s), Math.floor(2*s), 4*s, 4*s);
                     break;
                 case 'female_glasses':
                     context.fillStyle = colors.hair; // Long hair sides
-                    context.fillRect(-5*s, -8*s, 2*s, 8*s);
-                    context.fillRect(3*s, -8*s, 2*s, 8*s);
+                    context.fillRect(Math.floor(-5*s), Math.floor(-8*s), 2*s, 8*s);
+                    context.fillRect(Math.floor(3*s), Math.floor(-8*s), 2*s, 8*s);
                     context.fillStyle = colors.glasses;
-                    context.fillRect(-3*s, -7*s, 2*s, 1*s);
-                    context.fillRect(1*s, -7*s, 2*s, 1*s);
-                    context.fillRect(-1*s, -7*s, 2*s, 1*s);
+                    context.fillRect(Math.floor(-3*s), Math.floor(-7*s), 2*s, 1*s);
+                    context.fillRect(Math.floor(1*s), Math.floor(-7*s), 2*s, 1*s);
+                    context.fillRect(Math.floor(-1*s), Math.floor(-7*s), 2*s, 1*s);
                     break;
                 case 'female_catears':
                      context.fillStyle = colors.hair; // Ponytail
-                     context.fillRect(-1*s, -1*s, 2*s, 4*s);
+                     context.fillRect(Math.floor(-1*s), Math.floor(-1*s), 2*s, 4*s);
                      context.fillStyle = colors.ears;
-                     context.beginPath(); context.moveTo(-4*s, -11*s); context.lineTo(-2*s, -13*s); context.lineTo(-1*s, -11*s); context.closePath(); context.fill();
-                     context.beginPath(); context.moveTo(1*s, -11*s); context.lineTo(2*s, -13*s); context.lineTo(4*s, -11*s); context.closePath(); context.fill();
+                     context.beginPath(); context.moveTo(Math.floor(-4*s), Math.floor(-11*s)); context.lineTo(Math.floor(-2*s), Math.floor(-13*s)); context.lineTo(Math.floor(-1*s), Math.floor(-11*s)); context.closePath(); context.fill();
+                     context.beginPath(); context.moveTo(Math.floor(1*s), Math.floor(-11*s)); context.lineTo(Math.floor(2*s), Math.floor(-13*s)); context.lineTo(Math.floor(4*s), Math.floor(-11*s)); context.closePath(); context.fill();
                     break;
             }
             
             // Arms
             context.fillStyle = colors.skin;
-            context.fillRect(-6*s, -3*s, 2*s, 6*s);
-            context.fillRect(4*s, -3*s, 2*s, 6*s);
+            context.fillRect(Math.floor(-6*s), Math.floor(-3*s), 2*s, 6*s);
+            context.fillRect(Math.floor(4*s), Math.floor(-3*s), 2*s, 6*s);
 
             context.restore();
         }
@@ -437,14 +437,11 @@
         function drawLevel(levelId, cameraX, cameraY) {
             const level = gameState.levels[levelId];
             if (!level) return;
-            
-            ctx.save();
-            ctx.translate(Math.floor(-cameraX), Math.floor(-cameraY));
 
             const startX = Math.max(0, Math.floor(cameraX / TILE_SIZE));
-            const endX = Math.min(MAP_WIDTH, Math.ceil((cameraX + (canvas.width / CAMERA_ZOOM)) / TILE_SIZE));
+            const endX = Math.min(MAP_WIDTH, Math.ceil((cameraX + (canvas.width / CAMERA_ZOOM)) / TILE_SIZE) + 1);
             const startY = Math.max(0, Math.floor(cameraY / TILE_SIZE));
-            const endY = Math.min(MAP_HEIGHT, Math.ceil((cameraY + (canvas.height / CAMERA_ZOOM)) / TILE_SIZE));
+            const endY = Math.min(MAP_HEIGHT, Math.ceil((cameraY + (canvas.height / CAMERA_ZOOM)) / TILE_SIZE) + 1);
 
             for (let y = startY; y < endY; y++) {
                 for (let x = startX; x < endX; x++) {
@@ -466,7 +463,6 @@
                     }
                 }
             }
-            ctx.restore();
         }
 
         function drawClues(levelId) {
@@ -801,9 +797,6 @@
                         if (grid[elevatorY] && grid[elevatorY][elevatorX] && grid[elevatorY][elevatorX].type === 'FLOOR') {
                              grid[elevatorY][elevatorX] = { type: 'ELEVATOR', targetLevel: targetLevelId };
                              levelData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId }); // Store for reference
-                        } else {
-                            console.warn(`Could not place elevator for ${levelId} to ${targetLevelId} at x:${elevatorX}, y:${elevatorY}. Retrying...`);
-                            // This is a simplified retry. For robustness, you might want a loop with a max attempt.
                         }
                     }
                 });
@@ -894,25 +887,53 @@
         function checkElevatorUse() {
             const player = gameState.players[myPlayerId];
             if (!player) return;
+
+            const now = Date.now();
+            if (player.lastElevatorUse && now - player.lastElevatorUse < 500) { // Half-second cooldown
+                return;
+            }
+
             const playerCellX = Math.floor(player.x / TILE_SIZE);
             const playerCellY = Math.floor(player.y / TILE_SIZE);
             const tile = gameState.levels[player.level]?.grid[playerCellY]?.[playerCellX];
 
             if (tile && tile.type === 'ELEVATOR') {
+                player.lastElevatorUse = now;
                 const currentLevelId = player.level;
                 player.level = tile.targetLevel;
+                
                  const targetLevelData = gameState.levels[player.level];
+                 let destElevatorX, destElevatorY;
+
+                 // Find the corresponding elevator on the target level
                  for (let y = 0; y < MAP_HEIGHT; y++) {
                      for (let x = 0; x < MAP_WIDTH; x++) {
                          const targetTile = targetLevelData.grid[y][x];
                          if (targetTile.type === 'ELEVATOR' && targetTile.targetLevel === currentLevelId) {
-                            player.x = (x + 0.5) * TILE_SIZE;
-                            player.y = (y + 0.5) * TILE_SIZE;
-                            broadcastPlayerState();
-                            return; 
+                            destElevatorX = x;
+                            destElevatorY = y;
+                            break;
+                         }
+                     }
+                     if(destElevatorX !== undefined) break;
+                 }
+
+                 if (destElevatorX !== undefined) {
+                     // Find a valid floor tile next to the destination elevator to spawn on
+                     const offsets = [{dx: 0, dy: 1}, {dx: 0, dy: -1}, {dx: 1, dy: 0}, {dx: -1, dy: 0}];
+                     for (const offset of offsets) {
+                         const spawnX = destElevatorX + offset.dx;
+                         const spawnY = destElevatorY + offset.dy;
+                         if(targetLevelData.grid[spawnY]?.[spawnX]?.type === 'FLOOR') {
+                             player.x = (spawnX + 0.5) * TILE_SIZE;
+                             player.y = (spawnY + 0.5) * TILE_SIZE;
+                             broadcastPlayerState();
+                             return;
                          }
                      }
                  }
+                 
+                 // Failsafe spawn if no adjacent floor is found
                  player.x = (MAP_WIDTH / 2) * TILE_SIZE;
                  player.y = (MAP_HEIGHT / 2) * TILE_SIZE;
                  broadcastPlayerState();
