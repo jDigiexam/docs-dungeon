@@ -125,7 +125,7 @@
     <script type="module">
         // --- 0. SUPABASE & GENERAL SETUP ---
         const SUPABASE_URL = 'https://uypjowqnnostwxmcflnm.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGtUgiwGnKcs7GBnaU';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5cGpvd3Fubm9zdHd4bWNmbG5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMTg3NjksImV4cCI6MjA3NTU5NDc2OX0.iUDDwG-TXg5AZNdXxKViz9JomSGvUgiwGnKcs7GBnaU';
         const { createClient } = supabase;
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -190,66 +190,6 @@
         let isMicOn = false;
         let isCamOn = false;
         
-        // --- SPRITE DEFINITIONS ---
-        // 0:empty, 1:hair, 2:skin, 3:shirt, 4:pants/suit, 5:shoes, 6:tie, 7:glasses, 8:ears, 9:overalls, 10:briefcase
-        const sprites = {
-            male_tie: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '6':'tie', '10':'briefcase'},
-                data: [
-                    [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,3,3,3,3,3,4,0],[0,4,3,6,3,3,3,4,0],
-                    [0,4,3,3,6,3,3,4,0],[0,4,3,3,3,3,3,4,0],[0,4,4,4,4,4,4,4,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[10,10,10,5,0,5,5,0,0]
-                ]
-            },
-            male_tech: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '7':'glasses'},
-                data: [
-                    [0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],[0,2,7,2,2,2,7,2,0],
-                    [0,2,2,2,2,2,2,2,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
-                    [0,3,3,3,3,3,3,3,0],[0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
-                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
-                ]
-            },
-            male_janitor: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '9':'overalls', '5':'shoes'},
-                data: [
-                    [0,0,1,1,1,1,1,0,0],[0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[9,9,9,9,9,9,9,9,9],[0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],
-                    [0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],[0,9,9,9,9,9,9,9,0],[0,0,9,9,0,9,9,0,0],
-                    [0,0,9,9,0,9,9,0,0],[0,0,9,9,0,9,9,0,0],[0,0,5,5,0,5,5,0,0],[0,0,5,5,0,5,5,0,0]
-                ]
-            },
-            female_suit: {
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '10':'briefcase'},
-                data: [
-                    [0,1,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],[0,2,2,2,2,2,2,2,0],
-                    [0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],[0,4,3,3,3,3,3,4,0],[0,4,3,3,3,3,3,4,0],
-                    [0,4,3,3,3,3,3,4,0],[0,4,3,3,3,3,3,4,0],[0,4,4,4,4,4,4,4,0],[0,0,4,4,0,4,4,0,0],
-                    [0,0,4,4,0,4,4,0,0],[0,0,4,4,0,4,4,0,0],[0,0,5,5,0,5,5,0,0],[10,10,10,5,0,5,5,0,0]
-                ]
-            },
-            female_glasses: { // Straight hair, glasses, casual top
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '7':'glasses'},
-                data: [
-                    [1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],[1,1,2,2,2,2,2,1,1],[1,1,2,7,2,2,7,2,1],
-                    [1,1,2,2,2,2,2,2,1],[1,1,2,2,2,2,2,2,1],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
-                    [0,3,3,3,3,3,3,3,0],[0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
-                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
-                ]
-            },
-            female_catears: { // Ponytail, cat ears
-                width: 9, height: 16, map: {'1':'hair', '2':'skin', '3':'shirt', '4':'pants', '5':'shoes', '8':'ears'},
-                data: [
-                    [8,1,1,1,1,1,1,1,8],[1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1],
-                    [0,1,2,2,2,2,2,1,0],[0,2,0,2,2,2,0,2,0],[0,2,2,2,2,2,2,2,0],
-                    [0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],[0,3,3,3,3,3,3,3,0],
-                    [0,4,4,4,4,4,4,4,0],[0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],
-                    [0,4,4,0,0,0,4,4,0],[0,4,4,0,0,0,4,4,0],[0,5,5,0,0,0,5,5,0],[0,5,5,0,0,0,5,5,0]
-                ]
-            }
-        };
-
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
         window.onresize = () => resizeCanvas();
@@ -286,7 +226,7 @@
             };
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
-            drawPlayerSprite(previewCtx, sprites[style], colors, lobbyPreviewCanvas.width / 2, lobbyPreviewCanvas.height / 2, 4);
+            drawPlayerSprite(previewCtx, style, colors, lobbyPreviewCanvas.width / 2, lobbyPreviewCanvas.height / 2, 4);
         }
 
         function resizeCanvas() {
@@ -358,7 +298,7 @@
             const cameraY = myPlayer.y - (canvas.height / 2 / CAMERA_ZOOM);
             ctx.translate(-cameraX, -cameraY);
 
-            ctx.fillStyle = 'black';
+            ctx.fillStyle = '#1f2937'; // Floor color
             ctx.fillRect(cameraX, cameraY, canvas.width / CAMERA_ZOOM, canvas.height / CAMERA_ZOOM);
             
             if (!gameState.levels[myPlayer.level]) {
@@ -397,9 +337,6 @@
         }
         
         function drawPlayer(player) {
-            const spriteDef = sprites[player.spriteStyle];
-            if (!spriteDef) return;
-
             let colors = { ...player.colors }; 
              if (player.spriteStyle === 'male_janitor') colors.overalls = colors.shirt;
              if (player.spriteStyle === 'female_catears') colors.ears = colors.hair;
@@ -417,31 +354,92 @@
             } else if (player.isMonster) {
                 colors = { hair: '#111827', shirt: '#991b1b', pants: '#1f2937', skin: '#dc2626', shoes: '#000000', tie: '#000000', glasses: '#000', ears: '#111827', overalls: '#991b1b', briefcase: '#000000' };
             }
-            drawPlayerSprite(ctx, spriteDef, colors, player.x, player.y, SPRITE_RENDER_SCALE);
+            drawPlayerSprite(ctx, player.spriteStyle, colors, player.x, player.y, SPRITE_RENDER_SCALE);
         }
 
-        function drawPlayerSprite(context, spriteDef, colors, centerX, centerY, scale) {
-            const { width, height, data, map } = spriteDef;
-            const totalWidth = width * scale;
-            const totalHeight = height * scale;
+        function drawPlayerSprite(context, style, colors, centerX, centerY, scale) {
+            const s = scale;
+            context.save();
+            context.translate(centerX, centerY);
 
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const pixelType = data[y][x];
-                    if (pixelType !== 0) {
-                        const part = map[pixelType];
-                        context.fillStyle = colors[part] || '#FF00FF';
-                        const drawX = Math.floor(centerX - (totalWidth / 2) + (x * scale));
-                        const drawY = Math.floor(centerY - (totalHeight / 2) + (y * scale));
-                        context.fillRect(drawX, drawY, scale, scale);
-                    }
-                }
+            // Body
+            context.fillStyle = colors.pants;
+            context.fillRect(-3*s, 3*s, 6*s, 4*s); // Legs
+            context.fillStyle = colors.shirt;
+            context.fillRect(-4*s, -4*s, 8*s, 7*s); // Torso
+
+            // Head
+            context.fillStyle = colors.skin;
+            context.fillRect(-3*s, -9*s, 6*s, 6*s);
+            context.fillStyle = colors.hair;
+            context.fillRect(-4*s, -11*s, 8*s, 3*s); // Hair base
+            
+            // Style details
+            switch(style) {
+                case 'male_tie':
+                    context.fillStyle = colors.pants; // Suit jacket
+                    context.fillRect(-5*s, -4*s, 10*s, 6*s);
+                    context.fillStyle = colors.shirt; // Shirt V
+                    context.beginPath(); context.moveTo(-1*s, -4*s); context.lineTo(0, -2*s); context.lineTo(1*s, -4*s); context.closePath(); context.fill();
+                    context.fillStyle = colors.tie; // Tie
+                    context.fillRect(-1*s, -2*s, 2*s, 5*s);
+                    context.fillStyle = colors.briefcase;
+                    context.fillRect(-8*s, 4*s, 4*s, 4*s);
+                    break;
+                case 'male_tech':
+                    context.fillStyle = colors.hair; // Hair fluff
+                    context.fillRect(-2*s, -12*s, 4*s, 1*s);
+                    context.fillStyle = colors.glasses;
+                    context.fillRect(-3*s, -7*s, 2*s, 1*s);
+                    context.fillRect(1*s, -7*s, 2*s, 1*s);
+                    context.fillRect(-1*s, -7*s, 2*s, 1*s);
+                    break;
+                case 'male_janitor':
+                     context.fillStyle = colors.overalls;
+                     context.fillRect(-5*s, -1*s, 10*s, 8*s); // Overalls body
+                     context.fillRect(-5*s, -3*s, 2*s, 4*s); // Strap L
+                     context.fillRect(3*s, -3*s, 2*s, 4*s); // Strap R
+                    break;
+                case 'female_suit':
+                    context.fillStyle = colors.pants; // Suit jacket
+                    context.fillRect(-5*s, -4*s, 10*s, 8*s);
+                     context.fillStyle = colors.shirt; // Shirt V
+                    context.beginPath(); context.moveTo(-1*s, -4*s); context.lineTo(0, -1*s); context.lineTo(1*s, -4*s); context.closePath(); context.fill();
+                    context.fillStyle = colors.briefcase;
+                    context.fillRect(-9*s, 2*s, 4*s, 4*s);
+                    break;
+                case 'female_glasses':
+                    context.fillStyle = colors.hair; // Long hair sides
+                    context.fillRect(-5*s, -8*s, 2*s, 8*s);
+                    context.fillRect(3*s, -8*s, 2*s, 8*s);
+                    context.fillStyle = colors.glasses;
+                    context.fillRect(-3*s, -7*s, 2*s, 1*s);
+                    context.fillRect(1*s, -7*s, 2*s, 1*s);
+                    context.fillRect(-1*s, -7*s, 2*s, 1*s);
+                    break;
+                case 'female_catears':
+                     context.fillStyle = colors.hair; // Ponytail
+                     context.fillRect(-1*s, -1*s, 2*s, 4*s);
+                     context.fillStyle = colors.ears;
+                     context.beginPath(); context.moveTo(-4*s, -11*s); context.lineTo(-2*s, -13*s); context.lineTo(-1*s, -11*s); context.closePath(); context.fill();
+                     context.beginPath(); context.moveTo(1*s, -11*s); context.lineTo(2*s, -13*s); context.lineTo(4*s, -11*s); context.closePath(); context.fill();
+                    break;
             }
+            
+            // Arms
+            context.fillStyle = colors.skin;
+            context.fillRect(-6*s, -3*s, 2*s, 6*s);
+            context.fillRect(4*s, -3*s, 2*s, 6*s);
+
+            context.restore();
         }
         
         function drawLevel(levelId, cameraX, cameraY) {
             const level = gameState.levels[levelId];
             if (!level) return;
+            
+            ctx.save();
+            ctx.translate(Math.floor(-cameraX), Math.floor(-cameraY));
 
             const startX = Math.max(0, Math.floor(cameraX / TILE_SIZE));
             const endX = Math.min(MAP_WIDTH, Math.ceil((cameraX + (canvas.width / CAMERA_ZOOM)) / TILE_SIZE));
@@ -451,14 +449,11 @@
             for (let y = startY; y < endY; y++) {
                 for (let x = startX; x < endX; x++) {
                     const tile = level.grid[y][x];
-                    const xPos = Math.floor(x * TILE_SIZE);
-                    const yPos = Math.floor(y * TILE_SIZE);
+                    const xPos = x * TILE_SIZE;
+                    const yPos = y * TILE_SIZE;
 
                     if (tile.type === 'WALL') {
                         ctx.fillStyle = '#374151';
-                        ctx.fillRect(xPos, yPos, TILE_SIZE, TILE_SIZE);
-                    } else if (tile.type === 'FLOOR' || tile.type === 'DOOR') {
-                        ctx.fillStyle = '#1f2937';
                         ctx.fillRect(xPos, yPos, TILE_SIZE, TILE_SIZE);
                     } else if (tile.type === 'ELEVATOR') {
                         ctx.fillStyle = '#4f46e5';
@@ -471,6 +466,7 @@
                     }
                 }
             }
+            ctx.restore();
         }
 
         function drawClues(levelId) {
@@ -697,7 +693,7 @@
         // --- 6. GAME MECHANICS (LEVELS, CLUES, COMBAT) ---
         function generateLevels() {
             const levels = {};
-            const mapData = {
+            const levelData = {
                 A: {
                     elevators: [],
                     rooms: [
@@ -724,9 +720,9 @@
                 }
             };
 
-            for (const levelId in mapData) {
+            for (const levelId in levelData) {
                 const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
-                const { rooms } = mapData[levelId];
+                const { rooms } = levelData[levelId];
 
                 // Draw rooms
                 rooms.forEach(room => {
@@ -775,7 +771,7 @@
                 }
 
                 // Place elevators dynamically within rooms
-                const otherLevels = Object.keys(mapData).filter(id => id !== levelId);
+                const otherLevels = Object.keys(levelData).filter(id => id !== levelId);
                 otherLevels.forEach(targetLevelId => {
                     const availableRooms = rooms.filter(room => {
                         // Ensure there's space for the elevator (1x1 tile) within the room
@@ -804,7 +800,7 @@
                         // Ensure the elevator location is valid and not already occupied
                         if (grid[elevatorY] && grid[elevatorY][elevatorX] && grid[elevatorY][elevatorX].type === 'FLOOR') {
                              grid[elevatorY][elevatorX] = { type: 'ELEVATOR', targetLevel: targetLevelId };
-                             mapData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId }); // Store for reference
+                             levelData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId }); // Store for reference
                         } else {
                             console.warn(`Could not place elevator for ${levelId} to ${targetLevelId} at x:${elevatorX}, y:${elevatorY}. Retrying...`);
                             // This is a simplified retry. For robustness, you might want a loop with a max attempt.
