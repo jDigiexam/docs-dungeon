@@ -781,8 +781,7 @@
                 let tooCloseOnSameLevel = clues.some(clue => clue.level === loc.level && Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
                 if (!tooCloseOnSameLevel) {
                     clues.push({ 
-                        id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: [],
-                        spriteIndex: Math.floor(Math.random() * clueSprites.length)
+                        id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: []
                     });
                 }
             }
