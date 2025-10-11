@@ -11,6 +11,7 @@
         #game-canvas, #lobby-preview-canvas { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
         /* Simple focus styles for accessibility and clarity */
         input:focus, button:focus, select:focus { outline: 2px solid #4f46e5; outline-offset: 2px; }
+        input[type="color"] { padding: 0; border: none; width: 100%; height: 2rem; cursor: pointer; }
     </style>
 </head>
 <body class="bg-gray-900 text-white overflow-hidden h-screen flex flex-col md:flex-row items-stretch">
@@ -157,10 +158,10 @@
         const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
-        const PLAYER_SPEED = 5; 
-        const MONSTER_SPEED = 5.5;
+        const PLAYER_SPEED = 7; 
+        const MONSTER_SPEED = 7.5;
         const SIGHT_RADIUS = 8;
-        const CAMERA_ZOOM = 1.0;
+        const CAMERA_ZOOM = 0.75;
 
         // WebRTC State
         let localStream;
@@ -990,3 +991,4 @@
     </script>
 </body>
 </html>
+
