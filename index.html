@@ -79,12 +79,12 @@
                 <div class="mb-4">
                     <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
                     <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
-                        <option value="red_wizard">Red Wizard</option>
-                        <option value="blue_wizard">Blue Wizard</option>
-                        <option value="green_wizard">Green Wizard</option>
-                        <option value="silver_knight">Silver Knight</option>
-                        <option value="dark_knight">Dark Knight</option>
-                        <option value="ranger">Ranger</option>
+                        <option value="male_tie">Office Worker</option>
+                        <option value="male_tech">Tech Worker</option>
+                        <option value="male_janitor">Janitor</option>
+                        <option value="female_suit">Business Suit</option>
+                        <option value="female_glasses">Casual Blouse</option>
+                        <option value="female_catears">Cat Ears</option>
                     </select>
                 </div>
                 
@@ -152,7 +152,7 @@
         let gameChannel = null;
         
         // Game Constants
-        const TILE_SIZE = 48;
+        const TILE_SIZE = 128;
         const SPRITE_SIZE = 128; // The pixel dimension of a single sprite in the spritesheets
         const MAP_WIDTH = 100; 
         const MAP_HEIGHT = 80;
@@ -161,7 +161,7 @@
         const PLAYER_SPEED = 3.5; 
         const MONSTER_SPEED = 4.0;
         const SIGHT_RADIUS = 8;
-        const CAMERA_ZOOM = 1.5;
+        const CAMERA_ZOOM = 1.0;
 
         // WebRTC State
         let localStream;
@@ -372,7 +372,7 @@
             ctx.drawImage(
                 spritesheet,
                 spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE,
-                Math.floor(player.x - TILE_SIZE), Math.floor(player.y - TILE_SIZE), TILE_SIZE*2, TILE_SIZE*2
+                Math.floor(player.x - TILE_SIZE / 2), Math.floor(player.y - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE
             );
 
             ctx.restore();
