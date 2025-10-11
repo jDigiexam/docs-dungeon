@@ -126,16 +126,16 @@
         // Game State
         const gameState = { 
             players: {}, 
-            maze: [], 
+            levels: {},
             clues: [],
-            weapon: { id: 'weapon', x: -1, y: -1, spawnedForTeam: null }
+            weapon: { id: 'weapon', x: -1, y: -1, level: null, spawnedForTeam: null }
         };
         let myPlayerId = null;
         let gameChannel = null;
         
         // Game Constants
-        const MAZE_WIDTH = 25;
-        const MAZE_HEIGHT = 20;
+        const MAP_WIDTH = 30;
+        const MAP_HEIGHT = 22;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 5;
         const PLAYER_SPEED = 2;
@@ -170,7 +170,7 @@
 
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
-            CELL_SIZE = Math.min(canvas.width / MAZE_WIDTH, canvas.height / MAZE_HEIGHT);
+            CELL_SIZE = Math.min(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT);
 
             if (oldCellSize !== CELL_SIZE && myPlayerId) {
                 for (const playerId in gameState.players) {
@@ -197,8 +197,8 @@
             
             await startLocalMedia();
 
-            gameState.maze = generateMaze(MAZE_WIDTH, MAZE_HEIGHT);
-            gameState.clues = placeClues(gameState.maze, NUM_CLUES, MIN_CLUE_DISTANCE);
+            gameState.levels = generateLevels();
+            gameState.clues = placeClues(gameState.levels, NUM_CLUES, MIN_CLUE_DISTANCE);
 
             const startPos = { x: CELL_SIZE * 1.5, y: CELL_SIZE * 1.5 };
             gameState.players[myPlayerId] = {
@@ -206,6 +206,7 @@
                 username: username,
                 x: startPos.x,
                 y: startPos.y,
+                level: 'A',
                 color: `hsl(${Math.random() * 360}, 80%, 70%)`,
                 teamId: myPlayerId,
                 status: 'alive',
@@ -219,27 +220,36 @@
         }
 
         function gameLoop() {
-            if (gameState.players[myPlayerId]?.status !== 'alive') return; // Stop loop if dead
+            if (gameState.players[myPlayerId]?.status !== 'alive') return;
             updateMyPlayerPosition();
             checkClueCollection();
             checkWeaponCollection();
             checkPlayerCollisions();
+            checkElevatorUse();
             drawGame();
             requestAnimationFrame(gameLoop);
         }
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
-            if (!ctx) return;
+            if (!ctx || !myPlayerId) return;
+            const myPlayer = gameState.players[myPlayerId];
+            if (!myPlayer) return;
+
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            if (gameState.maze.length === 0) return;
+            if (!gameState.levels[myPlayer.level]) return;
 
-            drawMaze();
-            drawClues();
-            drawWeapon();
-            Object.values(gameState.players).forEach(drawPlayer);
+            drawLevel(myPlayer.level);
+            drawClues(myPlayer.level);
+            drawWeapon(myPlayer.level);
+            
+            Object.values(gameState.players).forEach(player => {
+                if (player.level === myPlayer.level) {
+                    drawPlayer(player);
+                }
+            });
             
             drawFogOfWar();
         }
@@ -251,10 +261,7 @@
             ctx.save();
             ctx.fillStyle = 'black';
             ctx.beginPath();
-            // Create a path for the outer rectangle (the fog)
             ctx.rect(0, 0, canvas.width, canvas.height);
-            // Create a path for the inner circle (the viewport), winding it counter-clockwise
-            // which effectively makes it a "hole" when filled.
             ctx.arc(me.x, me.y, SIGHT_RADIUS * CELL_SIZE, 0, Math.PI * 2, true); 
             ctx.fill();
             ctx.restore();
@@ -263,9 +270,9 @@
         function drawPlayer(player) {
             ctx.save();
             if (player.status === 'dead') {
-                ctx.fillStyle = '#6b7280'; // Gray for dead players
+                ctx.fillStyle = '#6b7280';
             } else if (player.isMonster) {
-                ctx.fillStyle = '#ef4444'; // Red tint for monster
+                ctx.fillStyle = '#ef4444';
             } else {
                 ctx.fillStyle = player.color;
             }
@@ -273,29 +280,42 @@
             ctx.restore();
         }
         
-        function drawMaze() {
-            ctx.strokeStyle = '#374151';
-            ctx.lineWidth = 2;
-            for (let y = 0; y < MAZE_HEIGHT; y++) {
-                for (let x = 0; x < MAZE_WIDTH; x++) {
-                    const cell = gameState.maze[y][x];
+        function drawLevel(levelId) {
+            const level = gameState.levels[levelId];
+            if (!level) return;
+
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    const tile = level.grid[y][x];
                     const xPos = x * CELL_SIZE;
                     const yPos = y * CELL_SIZE;
-                    if (cell.walls.top) { ctx.beginPath(); ctx.moveTo(xPos, yPos); ctx.lineTo(xPos + CELL_SIZE, yPos); ctx.stroke(); }
-                    if (cell.walls.right) { ctx.beginPath(); ctx.moveTo(xPos + CELL_SIZE, yPos); ctx.lineTo(xPos + CELL_SIZE, yPos + CELL_SIZE); ctx.stroke(); }
-                    if (cell.walls.bottom) { ctx.beginPath(); ctx.moveTo(xPos + CELL_SIZE, yPos + CELL_SIZE); ctx.lineTo(xPos, yPos + CELL_SIZE); ctx.stroke(); }
-                    if (cell.walls.left) { ctx.beginPath(); ctx.moveTo(xPos, yPos + CELL_SIZE); ctx.lineTo(xPos, yPos); ctx.stroke(); }
+
+                    if (tile.type === 'WALL') {
+                        ctx.fillStyle = '#374151';
+                        ctx.fillRect(xPos, yPos, CELL_SIZE, CELL_SIZE);
+                    } else if (tile.type === 'FLOOR' || tile.type === 'DOOR') {
+                        ctx.fillStyle = '#1f2937';
+                        ctx.fillRect(xPos, yPos, CELL_SIZE, CELL_SIZE);
+                    } else if (tile.type === 'ELEVATOR') {
+                        ctx.fillStyle = '#4f46e5';
+                        ctx.fillRect(xPos, yPos, CELL_SIZE, CELL_SIZE);
+                        ctx.fillStyle = 'white';
+                        ctx.font = `${CELL_SIZE * 0.6}px monospace`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(tile.targetLevel, xPos + CELL_SIZE / 2, yPos + CELL_SIZE / 2);
+                    }
                 }
             }
         }
 
-        function drawClues() {
+        function drawClues(levelId) {
             const myTeamId = gameState.players[myPlayerId]?.teamId;
-            if (!myTeamId || gameState.clues.length === 0) return;
+            if (!myTeamId) return;
 
             ctx.fillStyle = 'yellow';
             gameState.clues.forEach(clue => {
-                if (!clue.collectedByTeams.includes(myTeamId)) {
+                if (clue.level === levelId && !clue.collectedByTeams.includes(myTeamId)) {
                     const xPos = (clue.x + 0.5) * CELL_SIZE;
                     const yPos = (clue.y + 0.5) * CELL_SIZE;
                     ctx.beginPath();
@@ -305,9 +325,9 @@
             });
         }
         
-        function drawWeapon() {
+        function drawWeapon(levelId) {
             const myTeamId = gameState.players[myPlayerId]?.teamId;
-            if (gameState.weapon.spawnedForTeam !== myTeamId) return;
+            if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
 
             const x = (gameState.weapon.x + 0.5) * CELL_SIZE;
             const y = (gameState.weapon.y + 0.5) * CELL_SIZE;
@@ -317,30 +337,21 @@
             ctx.translate(x, y);
             ctx.rotate(Math.PI / 4); 
 
-            // Hilt (handle)
-            ctx.fillStyle = '#654321'; // Brown
+            ctx.fillStyle = '#654321';
             ctx.fillRect(-swordScale * 0.05, swordScale * 0.2, swordScale * 0.1, swordScale * 0.3);
-
-            // Guard
-            ctx.fillStyle = '#A0A0A0'; // Grey/silver
+            ctx.fillStyle = '#A0A0A0';
             ctx.fillRect(-swordScale * 0.2, swordScale * 0.1, swordScale * 0.4, swordScale * 0.1);
-
-            // Blade
-            ctx.fillStyle = '#ADD8E6'; // Light blue
+            ctx.fillStyle = '#ADD8E6';
             ctx.beginPath();
-            ctx.moveTo(-swordScale * 0.07, swordScale * 0.1); // Wider base
+            ctx.moveTo(-swordScale * 0.07, swordScale * 0.1);
             ctx.lineTo(swordScale * 0.07, swordScale * 0.1);
-            ctx.lineTo(0, -swordScale * 0.6); // Longer blade
+            ctx.lineTo(0, -swordScale * 0.6);
             ctx.closePath();
             ctx.fill();
-            
-            // Gem on the hilt
-            ctx.fillStyle = '#FFFF00'; // Yellow gem
+            ctx.fillStyle = '#FFFF00';
             ctx.beginPath();
             ctx.arc(0, swordScale * 0.15, swordScale * 0.05, 0, Math.PI * 2);
             ctx.fill();
-
-
             ctx.restore();
         }
 
@@ -367,16 +378,13 @@
                     if (payload.teamId === gameState.players[myPlayerId]?.teamId) {
                         gameState.weapon.x = payload.x;
                         gameState.weapon.y = payload.y;
+                        gameState.weapon.level = payload.level;
                         gameState.weapon.spawnedForTeam = payload.teamId;
                     }
                 })
                 .on('broadcast', { event: 'weapon_collect' }, ({ payload }) => {
-                    if (gameState.players[payload.playerId]) {
-                        gameState.players[payload.playerId].hasWeapon = true;
-                    }
-                    if (gameState.weapon.spawnedForTeam === payload.teamId) {
-                        gameState.weapon.spawnedForTeam = null; // Hide for everyone on the team
-                    }
+                    if (gameState.players[payload.playerId]) gameState.players[payload.playerId].hasWeapon = true;
+                    if (gameState.weapon.spawnedForTeam === payload.teamId) gameState.weapon.spawnedForTeam = null;
                 })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
                     const me = gameState.players[myPlayerId];
@@ -389,12 +397,9 @@
                             gameOverScreen.style.display = 'flex';
                         }
                     }
-                    // Monster checks for win condition
                     if (me && me.isMonster) {
                         const hunters = Object.values(gameState.players).filter(p => !p.isMonster && !p.hasWeapon);
-                        if (hunters.length > 0 && hunters.every(p => p.status === 'dead')) {
-                            broadcastMonsterWins();
-                        }
+                        if (hunters.length > 0 && hunters.every(p => p.status === 'dead')) broadcastMonsterWins();
                     }
                 })
                 .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
@@ -413,24 +418,17 @@
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
-                    const presences = Object.keys(presenceState);
-                    presences.sort(); // For deterministic host selection
-                    
+                    const presences = Object.keys(presenceState).sort();
                     if (presences.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
-                        const hostId = presences[0].split('_')[1]; // Extract timestamp from player_id
-                        if (myPlayerId.split('_')[1] === hostId) {
-                            const monsterPresenceKey = presences[1];
-                            const monsterId = presenceState[monsterPresenceKey][0].player_id;
+                        if (myPlayerId === presenceState[presences[0]][0].player_id) { // Only the first player assigns monster
+                            const monsterId = presenceState[presences[1]][0].player_id;
                             broadcastAssignMonster(monsterId);
                         }
                     }
-
                     for (const id in presenceState) {
                         if (id !== myPlayerId) {
                             const pres = presenceState[id][0];
-                             if (!peerConnections[pres.player_id]) {
-                                createPeerConnection(pres.player_id, true);
-                            }
+                             if (!peerConnections[pres.player_id]) createPeerConnection(pres.player_id, true);
                         }
                     }
                 })
@@ -455,7 +453,7 @@
         
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
-        function broadcastWeaponSpawn(teamId, x, y) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y } }); }
+        function broadcastWeaponSpawn(teamId, x, y, level) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y, level } }); }
         function broadcastWeaponCollect(playerId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_collect', payload: { playerId, teamId } }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
@@ -488,7 +486,10 @@
 
         function updateMyPlayerPosition() {
             const player = gameState.players[myPlayerId];
-            if (!player || player.status !== 'alive' || gameState.maze.length === 0) return;
+            if (!player || player.status !== 'alive') return;
+            const currentLevel = gameState.levels[player.level];
+            if (!currentLevel) return;
+
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
@@ -496,65 +497,147 @@
             if (mag > 0) {
                 const normalizedDx = (dx / mag) * player.speed;
                 const normalizedDy = (dy / mag) * player.speed;
-                let nextX = player.x + normalizedDx;
-                let nextY = player.y + normalizedDy;
-                const playerRadius = 4;
                 
-                let currentCellX = Math.floor(player.x / CELL_SIZE);
-                let currentCellY = Math.floor(player.y / CELL_SIZE);
-                
-                if (normalizedDx > 0 && gameState.maze[currentCellY][currentCellX].walls.right && nextX + playerRadius > (currentCellX + 1) * CELL_SIZE) nextX = (currentCellX + 1) * CELL_SIZE - playerRadius;
-                if (normalizedDx < 0 && gameState.maze[currentCellY][currentCellX].walls.left && nextX - playerRadius < currentCellX * CELL_SIZE) nextX = currentCellX * CELL_SIZE + playerRadius;
-                if (normalizedDy > 0 && gameState.maze[currentCellY][currentCellX].walls.bottom && nextY + playerRadius > (currentCellY + 1) * CELL_SIZE) nextY = (currentCellY + 1) * CELL_SIZE - playerRadius;
-                if (normalizedDy < 0 && gameState.maze[currentCellY][currentCellX].walls.top && nextY - playerRadius < currentCellY * CELL_SIZE) nextY = currentCellY * CELL_SIZE + playerRadius;
+                const nextGridX = Math.floor((player.x + normalizedDx) / CELL_SIZE);
+                const nextGridY = Math.floor((player.y + normalizedDy) / CELL_SIZE);
 
-                player.x = nextX;
-                player.y = nextY;
-                broadcastPlayerState();
+                if (currentLevel.grid[nextGridY] && currentLevel.grid[nextGridY][nextGridX] && currentLevel.grid[nextGridY][nextGridX].type !== 'WALL') {
+                     player.x += normalizedDx;
+                     player.y += normalizedDy;
+                     broadcastPlayerState();
+                }
             }
         }
         
-        // --- 6. GAME MECHANICS (MAZE, CLUES, COMBAT) ---
-        function generateMaze(width, height) {
-            let maze = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => ({ x, y, walls: { top: true, right: true, bottom: true, left: true }, visited: false })));
-            let stack = []; let current = maze[0][0]; current.visited = true;
-            const getNeighbors = (cell) => { let neighbors = []; const {x, y} = cell; if (y > 0 && !maze[y - 1][x].visited) neighbors.push(maze[y - 1][x]); if (x < width - 1 && !maze[y][x + 1].visited) neighbors.push(maze[y][x + 1]); if (y < height - 1 && !maze[y + 1][x].visited) neighbors.push(maze[y + 1][x]); if (x > 0 && !maze[y][x - 1].visited) neighbors.push(maze[y][x - 1]); return neighbors; };
-            while (true) { let neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); let next = neighbors[Math.floor(Math.random() * neighbors.length)]; if (next.y < current.y) { current.walls.top = false; next.walls.bottom = false; } else if (next.x > current.x) { current.walls.right = false; next.walls.left = false; } else if (next.y > current.y) { current.walls.bottom = false; next.walls.top = false; } else if (next.x < current.x) { current.walls.left = false; next.walls.right = false; } current = next; current.visited = true; } else if (stack.length > 0) { current = stack.pop(); } else { break; } }
-            const removalChance = 0.25;
-            for (let y = 0; y < height; y++) { for (let x = 0; x < width; x++) { if (x < width - 1 && Math.random() < removalChance) { maze[y][x].walls.right = false; maze[y][x + 1].walls.left = false; } if (y < height - 1 && Math.random() < removalChance) { maze[y][x].walls.bottom = false; maze[y + 1][x].walls.top = false; } } }
-            return maze;
+        // --- 6. GAME MECHANICS (LEVELS, CLUES, COMBAT) ---
+        function generateLevels() {
+            const levels = {};
+            const levelData = {
+                A: { elevators: [{x: 28, y: 1, target: 'B'}, {x: 28, y: 20, target: 'C'}] },
+                B: { elevators: [{x: 1, y: 10, target: 'A'}, {x: 15, y: 20, target: 'C'}] },
+                C: { elevators: [{x: 1, y: 1, target: 'A'}, {x: 28, y: 10, target: 'B'}] }
+            };
+
+            for (const levelId in levelData) {
+                const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
+                const rooms = [];
+
+                // Simple room placement logic
+                for(let i = 0; i < 8; i++) {
+                    let room;
+                    let attempts = 0;
+                    do {
+                        const w = Math.floor(Math.random() * 4) + 4;
+                        const h = Math.floor(Math.random() * 3) + 3;
+                        const x = Math.floor(Math.random() * (MAP_WIDTH - w - 2)) + 1;
+                        const y = Math.floor(Math.random() * (MAP_HEIGHT - h - 2)) + 1;
+                        room = { x, y, w, h };
+                        attempts++;
+                    } while (rooms.some(r => room.x < r.x + r.w && room.x + room.w > r.x && room.y < r.y + r.h && room.y + room.h > r.y) && attempts < 100);
+                    
+                    if (attempts < 100) {
+                        rooms.push(room);
+                        for (let ry = room.y; ry < room.y + room.h; ry++) {
+                            for (let rx = room.x; rx < room.x + room.w; rx++) {
+                                grid[ry][rx] = { type: 'FLOOR' };
+                            }
+                        }
+                    }
+                }
+
+                // Connect rooms with hallways
+                for(let i = 0; i < rooms.length - 1; i++) {
+                    const start = { x: Math.floor(rooms[i].x + rooms[i].w / 2), y: Math.floor(rooms[i].y + rooms[i].h / 2) };
+                    const end = { x: Math.floor(rooms[i+1].x + rooms[i+1].w / 2), y: Math.floor(rooms[i+1].y + rooms[i+1].h / 2) };
+                    let cx = start.x, cy = start.y;
+                    while(cx !== end.x || cy !== end.y) {
+                        if (cx !== end.x && Math.random() > 0.5) {
+                            grid[cy][cx] = { type: 'FLOOR' };
+                            cx += Math.sign(end.x - cx);
+                        } else if (cy !== end.y) {
+                            grid[cy][cx] = { type: 'FLOOR' };
+                            cy += Math.sign(end.y - cy);
+                        } else { // Handle straight line case
+                             grid[cy][cx] = { type: 'FLOOR' };
+                             cx += Math.sign(end.x - cx);
+                        }
+                    }
+                }
+
+                // Place doors
+                rooms.forEach(room => {
+                    let placedDoors = 0;
+                    while(placedDoors < 2) {
+                        const wall = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
+                        if (wall === 0) { const x = room.x + 1 + Math.floor(Math.random() * (room.w-2)); grid[room.y-1][x] = {type: 'FLOOR'}; grid[room.y][x] = {type: 'DOOR'}; }
+                        if (wall === 1) { const y = room.y + 1 + Math.floor(Math.random() * (room.h-2)); grid[y][room.x+room.w] = {type: 'FLOOR'}; grid[y][room.x+room.w-1] = {type: 'DOOR'}; }
+                        if (wall === 2) { const x = room.x + 1 + Math.floor(Math.random() * (room.w-2)); grid[room.y+room.h][x] = {type: 'FLOOR'}; grid[room.y+room.h-1][x] = {type: 'DOOR'}; }
+                        if (wall === 3) { const y = room.y + 1 + Math.floor(Math.random() * (room.h-2)); grid[y][room.x-1] = {type: 'FLOOR'}; grid[y][room.x] = {type: 'DOOR'}; }
+                        placedDoors++;
+                    }
+                });
+
+                levelData[levelId].elevators.forEach(e => {
+                    grid[e.y][e.x] = { type: 'ELEVATOR', targetLevel: e.target, targetX: e.x, targetY: e.y };
+                });
+                
+                levels[levelId] = { grid, rooms };
+            }
+            return levels;
         }
 
-        function placeClues(maze, numClues, minDistance) {
-            let clues = []; let possibleLocations = []; for (let y = 0; y < maze.length; y++) { for (let x = 0; x < maze[0].length; x++) { possibleLocations.push({x, y}); } }
-            for (let i = possibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [possibleLocations[i], possibleLocations[j]] = [possibleLocations[j], possibleLocations[i]]; }
-            while (clues.length < numClues && possibleLocations.length > 0) { let loc = possibleLocations.pop(); let tooClose = clues.some(clue => Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance); if (!tooClose) { clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, collectedByTeams: [] }); } } return clues;
+        function placeClues(levels, numClues, minDistance) {
+            let clues = [];
+            let allPossibleLocations = [];
+            for (const levelId in levels) {
+                levels[levelId].rooms.forEach(room => {
+                    for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
+                        for (let x = room.x + 1; x < room.x + room.w - 1; x++) {
+                            allPossibleLocations.push({ x, y, level: levelId });
+                        }
+                    }
+                });
+            }
+
+            for (let i = allPossibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [allPossibleLocations[i], allPossibleLocations[j]] = [allPossibleLocations[j], allPossibleLocations[i]]; }
+            
+            while (clues.length < numClues && allPossibleLocations.length > 0) {
+                let loc = allPossibleLocations.pop();
+                let tooCloseOnSameLevel = clues.some(clue => clue.level === loc.level && Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
+                if (!tooCloseOnSameLevel) {
+                    clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: [] });
+                }
+            }
+            return clues;
         }
         
         function spawnWeapon(teamId) {
-            let possibleLocations = [];
-            for (let y = 0; y < gameState.maze.length; y++) {
-                for (let x = 0; x < gameState.maze[0].length; x++) {
-                    possibleLocations.push({x, y});
-                }
+            let allPossibleLocations = [];
+            for (const levelId in gameState.levels) {
+                gameState.levels[levelId].rooms.forEach(room => {
+                    for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
+                        for (let x = room.x + 1; x < room.x + room.w - 1; x++) {
+                            allPossibleLocations.push({ x, y, level: levelId });
+                        }
+                    }
+                });
             }
-            const loc = possibleLocations[Math.floor(Math.random() * possibleLocations.length)];
-            gameState.weapon = { x: loc.x, y: loc.y, spawnedForTeam: teamId };
-            broadcastWeaponSpawn(teamId, loc.x, loc.y);
+            const loc = allPossibleLocations[Math.floor(Math.random() * allPossibleLocations.length)];
+            gameState.weapon = { x: loc.x, y: loc.y, level: loc.level, spawnedForTeam: teamId };
+            broadcastWeaponSpawn(teamId, loc.x, loc.y, loc.level);
         }
 
         function checkClueCollection() {
             const player = gameState.players[myPlayerId]; if(!player) return;
             const playerCellX = Math.floor(player.x / CELL_SIZE); const playerCellY = Math.floor(player.y / CELL_SIZE);
-            gameState.clues.forEach(clue => { if (clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { clue.collectedByTeams.push(player.teamId); broadcastClueCollected(clue.id, player.teamId); updateClueCounter(); } });
+            gameState.clues.forEach(clue => { if (clue.level === player.level && clue.x === playerCellX && clue.y === playerCellY && !clue.collectedByTeams.includes(player.teamId)) { clue.collectedByTeams.push(player.teamId); broadcastClueCollected(clue.id, player.teamId); updateClueCounter(); } });
         }
         
         function checkWeaponCollection() {
             const player = gameState.players[myPlayerId];
             if (!player || player.hasWeapon || gameState.weapon.spawnedForTeam !== player.teamId) return;
-            const playerCellX = Math.floor(player.x / CELL_SIZE);
-            const playerCellY = Math.floor(player.y / CELL_SIZE);
-            if (gameState.weapon.x === playerCellX && gameState.weapon.y === playerCellY) {
+            const playerCellX = Math.floor(player.x / CELL_SIZE); const playerCellY = Math.floor(player.y / CELL_SIZE);
+            if (gameState.weapon.level === player.level && gameState.weapon.x === playerCellX && gameState.weapon.y === playerCellY) {
                 player.hasWeapon = true;
                 gameState.weapon.spawnedForTeam = null;
                 broadcastWeaponCollect(player.id, player.teamId);
@@ -568,16 +651,45 @@
             for (const otherId in gameState.players) {
                 if (otherId === myPlayerId) continue;
                 const other = gameState.players[otherId];
-                if (other.status !== 'alive') continue;
+                if (other.status !== 'alive' || other.level !== me.level) continue;
 
                 const dist = Math.sqrt((me.x - other.x)**2 + (me.y - other.y)**2);
-                if (dist < 10) { // Collision threshold
-                    if (me.hasWeapon && other.isMonster) {
-                        broadcastMonsterKilled(me.username);
+                if (dist < 10) {
+                    if (me.hasWeapon && other.isMonster) broadcastMonsterKilled(me.username);
+                    if (me.isMonster && !other.hasWeapon) broadcastPlayerKilled(otherId);
+                }
+            }
+        }
+
+        function checkElevatorUse() {
+            const player = gameState.players[myPlayerId];
+            if (!player) return;
+            const playerCellX = Math.floor(player.x / CELL_SIZE);
+            const playerCellY = Math.floor(player.y / CELL_SIZE);
+            const tile = gameState.levels[player.level]?.grid[playerCellY]?.[playerCellX];
+
+            if (tile && tile.type === 'ELEVATOR') {
+                const targetLevelData = gameState.levels[tile.targetLevel];
+                const correspondingElevator = Object.values(targetLevelData.grid).flat().find(t => t.type === 'ELEVATOR' && t.targetLevel === player.level);
+                
+                if (correspondingElevator) {
+                    // Find the coordinates of the target elevator
+                    let targetX, targetY;
+                    for (let y = 0; y < MAP_HEIGHT; y++) {
+                        for (let x = 0; x < MAP_WIDTH; x++) {
+                            if (targetLevelData.grid[y][x] === correspondingElevator) {
+                                targetX = x;
+                                targetY = y;
+                                break;
+                            }
+                        }
+                        if (targetX !== undefined) break;
                     }
-                    if (me.isMonster && !other.hasWeapon) {
-                        broadcastPlayerKilled(otherId);
-                    }
+                    
+                    player.level = tile.targetLevel;
+                    player.x = (targetX + 0.5) * CELL_SIZE;
+                    player.y = (targetY + 0.5) * CELL_SIZE;
+                    broadcastPlayerState();
                 }
             }
         }
