@@ -72,34 +72,20 @@
 
         <!-- Lobby Screen --><div id="lobby-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-20 hidden">
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
-                <h2 class="text-2xl mb-4">Create Your Adventurer</h2>
+                <h2 class="text-2xl mb-4">Choose Your Hero</h2>
                 
-                <canvas id="lobby-preview-canvas" width="96" height="96" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
+                <canvas id="lobby-preview-canvas" width="64" height="64" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
         
-                <div class="grid grid-cols-2 gap-4 mb-4 text-left">
-                    <div>
-                        <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
-                        <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
-                            <option value="male_tie">Office Worker</option>
-                            <option value="male_tech">Tech Worker</option>
-                            <option value="male_janitor">Janitor</option>
-                            <option value="female_suit">Business Suit</option>
-                            <option value="female_glasses">Casual Blouse</option>
-                            <option value="female_catears">Cat Ears</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="hair-color-input" class="block text-sm font-medium">Hair Color:</label>
-                        <input type="color" id="hair-color-input" value="#964B00" class="w-full h-8 p-0 border-none rounded bg-gray-600">
-                    </div>
-                    <div>
-                        <label for="shirt-color-input" class="block text-sm font-medium">Tunic Color:</label>
-                        <input type="color" id="shirt-color-input" value="#006400" class="w-full h-8 p-0 border-none rounded bg-gray-600">
-                    </div>
-                    <div>
-                        <label for="pants-color-input" class="block text-sm font-medium">Pants Color:</label>
-                        <input type="color" id="pants-color-input" value="#3d3d3d" class="w-full h-8 p-0 border-none rounded bg-gray-600">
-                    </div>
+                <div class="mb-4">
+                    <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
+                    <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
+                        <option value="red_wizard">Red Wizard</option>
+                        <option value="blue_wizard">Blue Wizard</option>
+                        <option value="green_wizard">Green Wizard</option>
+                        <option value="silver_knight">Silver Knight</option>
+                        <option value="dark_knight">Dark Knight</option>
+                        <option value="ranger">Ranger</option>
+                    </select>
                 </div>
                 
                 <input id="username-input" type="text" placeholder="Enter your name" class="text-black p-2 rounded w-full mb-4">
@@ -154,10 +140,6 @@
         const gameOverSubtext = document.getElementById('game-over-subtext');
         const lobbyPreviewCanvas = document.getElementById('lobby-preview-canvas');
         const spriteStyleSelect = document.getElementById('sprite-style-select');
-        const hairColorInput = document.getElementById('hair-color-input');
-        const shirtColorInput = document.getElementById('shirt-color-input');
-        const pantsColorInput = document.getElementById('pants-color-input');
-
 
         // Game State
         const gameState = { 
@@ -178,7 +160,6 @@
         const PLAYER_SPEED = 2.5; 
         const MONSTER_SPEED = 2.8;
         const SIGHT_RADIUS = 10;
-        const SPRITE_RENDER_SCALE = 2;
         const CAMERA_ZOOM = 3.0;
 
         // WebRTC State
@@ -191,23 +172,40 @@
         let isCamOn = false;
 
         // Asset Loading
-        let assetsLoaded = false;
-        const tilesetImage = new Image();
+        const assets = {
+            tiles: new Image(),
+            chars: new Image()
+        };
+        let assetsLoaded = 0;
         
         const tileMap = {
-            FLOOR: [1, 5],
-            WALL_V: [12, 5], // Vertical wall
-            WALL_H: [13, 4], // Horizontal wall
-            WALL_TL: [12, 4], // Top-left corner
-            WALL_TR: [14, 4], // Top-right corner
-            WALL_BL: [12, 6], // Bottom-left corner
-            WALL_BR: [14, 6], // Bottom-right corner
-            WALL_T: [13, 6],  // T-junction (wall below)
-            WALL_B: [13, 5],  // T-junction (wall above)
-            WALL_L: [14, 5],  // T-junction (wall right)
-            WALL_R: [12, 5],  // T-junction (wall left)
-            WALL_CROSS: [13,5],
+            FLOOR: [1, 5], WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
+            WALL_TR: [14, 4], WALL_BL: [12, 6], WALL_BR: [14, 6], WALL_T: [13, 6],
+            WALL_B: [13, 5], WALL_L: [14, 5], WALL_R: [12, 5], WALL_CROSS: [13,5],
             ELEVATOR: [5, 1],
+        };
+
+        const sprites = {
+            red_wizard: {sx: 0, sy: 0},
+            orange_wizard: {sx: 16, sy: 0},
+            blue_wizard: {sx: 32, sy: 0},
+            green_wizard: {sx: 48, sy: 0},
+            dark_wizard: {sx: 0, sy: 16},
+            pink_wizard: {sx: 16, sy: 16},
+            grey_wizard: {sx: 32, sy: 16},
+            fire_wizard: {sx: 48, sy: 16},
+            green_hat_wizard: {sx: 0, sy: 32},
+            light_blue_wizard: {sx: 16, sy: 32},
+            white_wizard: {sx: 32, sy: 32},
+            yellow_wizard: {sx: 48, sy: 32},
+            brown_wizard: {sx: 0, sy: 48},
+            dark_knight: {sx: 16, sy: 48},
+            silver_knight: {sx: 32, sy: 48},
+            rogue: {sx: 48, sy: 48},
+            white_cat: {sx: 0, sy: 64},
+            bear: {sx: 16, sy: 64},
+            ranger: {sx: 32, sy: 64},
+            monster: {sx: 16, sy: 64} // Using bear as monster for now
         };
 
         // --- 1. INITIALIZATION ---
@@ -215,35 +213,50 @@
         window.onresize = () => resizeCanvas();
 
         function initGame() {
-            tilesetImage.src = './assets/Tiles.png';
-            tilesetImage.onload = () => {
-                assetsLoaded = true;
-                loadingScreen.style.display = 'none';
-                lobbyScreen.style.display = 'flex';
-                setupLobby();
+            const assetSources = {
+                tiles: 'assets/Tiles.png',
+                chars: 'assets/Chars.png'
             };
+            let assetsToLoad = Object.keys(assetSources).length;
+
+            function assetLoaded() {
+                assetsLoaded++;
+                if (assetsLoaded === assetsToLoad) {
+                    loadingScreen.style.display = 'none';
+                    lobbyScreen.style.display = 'flex';
+                    setupLobby();
+                }
+            }
+
+            for (const key in assetSources) {
+                assets[key].src = assetSources[key];
+                assets[key].onload = assetLoaded;
+            }
+
             resizeCanvas();
         }
 
         function setupLobby() {
             spriteStyleSelect.addEventListener('change', drawLobbyPreview);
-            hairColorInput.addEventListener('input', drawLobbyPreview);
-            shirtColorInput.addEventListener('input', drawLobbyPreview);
-            pantsColorInput.addEventListener('input', drawLobbyPreview);
             drawLobbyPreview();
         }
 
         function drawLobbyPreview() {
             const previewCtx = lobbyPreviewCanvas.getContext('2d');
             const style = spriteStyleSelect.value;
-            const colors = {
-                hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
-                overalls: shirtColorInput.value, tie: '#b91c1c', glasses: '#000000', ears: hairColorInput.value,
-                skin: '#f2d5b1', shoes: '#303030', briefcase: '#654321'
-            };
+            const spriteInfo = sprites[style];
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
-            drawPlayerSprite(previewCtx, style, colors, lobbyPreviewCanvas.width / 2, lobbyPreviewCanvas.height / 2, 4);
+            if (spriteInfo) {
+                const previewScale = 4;
+                 previewCtx.drawImage(
+                    assets.chars, 
+                    spriteInfo.sx, spriteInfo.sy, 16, 16,
+                    (lobbyPreviewCanvas.width - 16 * previewScale) / 2, 
+                    (lobbyPreviewCanvas.height - 16 * previewScale) / 2,
+                    16 * previewScale, 16 * previewScale
+                );
+            }
         }
 
         function resizeCanvas() {
@@ -278,11 +291,6 @@
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
                 isMonster: false, hasWeapon: false, lastElevatorUse: 0,
                 spriteStyle: spriteStyleSelect.value,
-                colors: {
-                    hair: hairColorInput.value, shirt: shirtColorInput.value, pants: pantsColorInput.value,
-                    overalls: shirtColorInput.value, tie: '#b91c1c', glasses: '#000000', ears: hairColorInput.value,
-                    skin: '#f2d5b1', shoes: '#303030', briefcase: '#654321'
-                }
             };
 
             await setupSupabaseChannels();
@@ -316,7 +324,7 @@
             const cameraY = myPlayer.y - (canvas.height / 2 / CAMERA_ZOOM);
             ctx.translate(-cameraX, -cameraY);
 
-            ctx.fillStyle = '#111827'; // Dark dungeon background
+            ctx.fillStyle = '#111827';
             ctx.fillRect(Math.floor(cameraX), Math.floor(cameraY), Math.ceil(canvas.width / CAMERA_ZOOM), Math.ceil(canvas.height / CAMERA_ZOOM));
             
             if (!gameState.levels[myPlayer.level]) {
@@ -355,44 +363,25 @@
         }
         
         function drawPlayer(player) {
-            let colors = { ...player.colors }; 
-             if (player.spriteStyle === 'male_janitor') colors.overalls = colors.shirt;
-             if (player.spriteStyle === 'female_catears') colors.ears = colors.hair;
+            let spriteInfo = sprites[player.spriteStyle];
+            if (player.isMonster) {
+                spriteInfo = sprites.monster;
+            }
+            if (!spriteInfo) return;
+
+            ctx.save();
 
             if (player.status === 'dead') {
-                colors = Object.entries(colors).reduce((acc, [key, hex]) => {
-                    if (typeof hex !== 'string' || !hex.startsWith('#')) { acc[key] = '#808080'; return acc; }
-                    const r = parseInt(hex.slice(1, 3), 16);
-                    const g = parseInt(hex.slice(3, 5), 16);
-                    const b = parseInt(hex.slice(5, 7), 16);
-                    const gray = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
-                    acc[key] = `rgb(${gray}, ${gray}, ${gray})`;
-                    return acc;
-                }, {});
-            } else if (player.isMonster) {
-                colors = { hair: '#111827', shirt: '#991b1b', pants: '#1f2937', skin: '#dc2626', shoes: '#000000', tie: '#000000', glasses: '#000', ears: '#111827', overalls: '#991b1b', briefcase: '#000000' };
+                ctx.filter = 'grayscale(100%)';
             }
-            drawPlayerSprite(ctx, player.spriteStyle, colors, player.x, player.y, SPRITE_RENDER_SCALE);
-        }
-
-        function drawPlayerSprite(context, style, colors, centerX, centerY, scale) {
-            const s = scale;
-            context.save();
-            context.translate(Math.floor(centerX), Math.floor(centerY));
-
-            // Body
-            context.fillStyle = colors.pants;
-            context.fillRect(Math.floor(-3*s), Math.floor(3*s), 6*s, 4*s); // Legs
-            context.fillStyle = colors.shirt;
-            context.fillRect(Math.floor(-4*s), Math.floor(-4*s), 8*s, 7*s); // Torso
-
-            // Head
-            context.fillStyle = colors.skin;
-            context.fillRect(Math.floor(-3*s), Math.floor(-9*s), 6*s, 6*s);
-            context.fillStyle = colors.hair;
-            context.fillRect(Math.floor(-4*s), Math.floor(-11*s), 8*s, 3*s); // Hair base
             
-            context.restore();
+            ctx.drawImage(
+                assets.chars,
+                spriteInfo.sx, spriteInfo.sy, 16, 16,
+                Math.floor(player.x - TILE_SIZE / 2), Math.floor(player.y - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE
+            );
+
+            ctx.restore();
         }
         
         function drawLevel(levelId, cameraX, cameraY) {
@@ -411,10 +400,10 @@
                     const yPos = y * TILE_SIZE;
 
                     if (tile.type === 'FLOOR') {
-                         ctx.drawImage(tilesetImage, tileMap.FLOOR[0] * 16, tileMap.FLOOR[1] * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                         ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * 16, tileMap.FLOOR[1] * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
                     } else {
                         let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
-                        ctx.drawImage(tilesetImage, sx * 16, sy * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                        ctx.drawImage(assets.tiles, sx * 16, sy * 16, 16, 16, xPos, yPos, TILE_SIZE, TILE_SIZE);
 
                         if (tile.type === 'ELEVATOR') {
                             ctx.fillStyle = 'white';
@@ -603,7 +592,7 @@
         joystickContainer.addEventListener('touchend', (e) => { e.preventDefault(); joystick.active = false; joystick.dx = 0; joystick.dy = 0; joystickThumb.style.transform = `translate(0px, 0px)`; });
 
         function isColliding(x, y, levelGrid) {
-            const playerSize = 8; 
+            const playerSize = TILE_SIZE / 2 * 0.8; 
             const gridX1 = Math.floor((x - playerSize) / TILE_SIZE);
             const gridX2 = Math.floor((x + playerSize) / TILE_SIZE);
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
@@ -630,15 +619,18 @@
                 
                 let moved = false;
                 
-                // Move X
-                if (!isColliding(player.x + moveX, player.y, currentLevel.grid)) {
-                    player.x += moveX;
+                let newX = player.x + moveX;
+                let newY = player.y + moveY;
+
+                // Check X-axis collision
+                if (!isColliding(newX, player.y, currentLevel.grid)) {
+                    player.x = newX;
                     moved = true;
                 }
 
-                // Move Y
-                if (!isColliding(player.x, player.y + moveY, currentLevel.grid)) {
-                    player.y += moveY;
+                // Check Y-axis collision
+                if (!isColliding(player.x, newY, currentLevel.grid)) {
+                    player.y = newY;
                     moved = true;
                 }
 
@@ -729,7 +721,7 @@
                  // Place elevators dynamically within rooms
                 const otherLevels = Object.keys(levelData).filter(id => id !== levelId);
                 otherLevels.forEach(targetLevelId => {
-                    const availableRooms = rooms.filter(room => room.w >= 3 && room.h >= 3);
+                    const availableRooms = [...rooms];
                     if (availableRooms.length > 0) {
                         const randomRoom = availableRooms.splice(Math.floor(Math.random() * availableRooms.length), 1)[0];
                         
@@ -990,7 +982,7 @@
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && chatInput.value.trim() !== '') {
                 if (!gameChannel) return;
-                const message = { username: gameState.players[myPlayerId]?.username || 'Player', text: chatInput.value.trim(), color: gameState.players[myPlayerId]?.colors?.shirt || '#FFFFFF' };
+                const message = { username: gameState.players[myPlayerId]?.username || 'Player', text: chatInput.value.trim(), color: '#FFFFFF' };
                 gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: message });
                 displayChatMessage(message);
                 chatInput.value = '';
@@ -1012,3 +1004,4 @@
     </script>
 </body>
 </html>
+
