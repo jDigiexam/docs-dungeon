@@ -153,15 +153,15 @@
         
         // Game Constants
         const TILE_SIZE = 128;
-        const SPRITE_SIZE = 128; // The pixel dimension of a single sprite in the spritesheets
+        const SPRITE_SIZE = 128;
         const MAP_WIDTH = 100; 
         const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
-        const PLAYER_SPEED = 3.5; 
-        const MONSTER_SPEED = 4.0;
+        const PLAYER_SPEED = 5; 
+        const MONSTER_SPEED = 5.5;
         const SIGHT_RADIUS = 8;
-        const CAMERA_ZOOM = 1.0;
+        const CAMERA_ZOOM = 2.0;
 
         // WebRTC State
         let localStream;
@@ -175,27 +175,29 @@
         let assetsLoadedCount = 0;
         
         const tileMap = {
-            FLOOR: [1, 5], WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
+            FLOOR_VARS: [[1,5], [2,5], [3,5]],
+            WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
             WALL_TR: [14, 4], WALL_BL: [12, 6], WALL_BR: [14, 6], WALL_T: [13, 6],
             WALL_B: [13, 5], WALL_L: [14, 5], WALL_R: [12, 5], WALL_CROSS: [13,5],
             ELEVATOR: [5, 1],
         };
 
         const sprites = {
-            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 32*8, sy: 0}, green_wizard: {sx: 48*8, sy: 0},
-            dark_knight: {sx: 16*8, sy: 48*8}, silver_knight: {sx: 32*8, sy: 48*8}, rogue: {sx: 48*8, sy: 48*8}, ranger: {sx: 32*8, sy: 64*8}
+            red_wizard: {sx: 0, sy: 0}, blue_wizard: {sx: 1*SPRITE_SIZE, sy: 0}, green_wizard: {sx: 2*SPRITE_SIZE, sy: 0},
+            dark_knight: {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+            rogue: {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, ranger: {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
         };
         const monsterSprites = [ 
-            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 16*8, sy: 0, sheet: 'monsters'}, {sx: 32*8, sy: 0, sheet: 'monsters'}, 
-            {sx: 48*8, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 16*8, sheet: 'monsters'}, {sx: 16*8, sy: 16*8, sheet: 'monsters'},
-            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 128, sy: 0, sheet: 'giants'}, {sx: 256, sy: 0, sheet: 'giants'}
+            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, 
+            {sx: 3*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 1*SPRITE_SIZE, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE, sheet: 'monsters'},
+            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'giants'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'giants'}
         ];
         const clueSprites = [ 
-            {sx: 0, sy: 0}, {sx: 16*8, sy: 0}, {sx: 32*8, sy: 0}, {sx: 48*8, sy: 0}, 
-            {sx: 0, sy: 16*8}, {sx: 16*8, sy: 16*8} 
+            {sx: 2*SPRITE_SIZE, sy: 0}, {sx: 3*SPRITE_SIZE, sy: 0}, {sx: 0, sy: 1*SPRITE_SIZE}, 
+            {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 0, sy: 5*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 5*SPRITE_SIZE} 
         ];
-        const weaponSprite = {sx: 32*8, sy: 16*8}; 
-        const scenerySprites = [ {sx: 0, sy: 0}, {sx: 16*8, sy: 0}, {sx: 32*8, sy: 0}, {sx: 0, sy: 16*8}, {sx: 16*8, sy: 16*8} ];
+        const weaponSprite = {sx: 3*SPRITE_SIZE, sy: 1*SPRITE_SIZE}; 
+        const scenerySprites = [ {sx: 0, sy: 0}, {sx: 1*SPRITE_SIZE, sy: 0}, {sx: 2*SPRITE_SIZE, sy: 0}, {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE} ];
 
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
@@ -304,7 +306,7 @@
             if (!myPlayer) return;
             
             ctx.save();
-            ctx.imageSmoothingEnabled = false; // Preserve pixel art style
+            ctx.imageSmoothingEnabled = false; 
             ctx.scale(CAMERA_ZOOM, CAMERA_ZOOM);
 
             const cameraX = myPlayer.x - (canvas.width / 2 / CAMERA_ZOOM);
@@ -393,7 +395,9 @@
                     const xPos = x * TILE_SIZE;
                     const yPos = y * TILE_SIZE;
                     
-                    ctx.drawImage(assets.tiles, tileMap.FLOOR[0] * SPRITE_SIZE, tileMap.FLOOR[1] * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    if (tile.floorVariant) {
+                        ctx.drawImage(assets.tiles, tile.floorVariant[0] * SPRITE_SIZE, tile.floorVariant[1] * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
+                    }
                     
                     if (tile.type !== 'FLOOR') {
                         let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
@@ -650,7 +654,8 @@
                 rooms.forEach(room => {
                     for (let ry = room.y; ry < room.y + room.h; ry++) {
                         for (let rx = room.x; rx < room.x + room.w; rx++) {
-                            grid[ry][rx] = { type: 'FLOOR' };
+                            const floorVar = tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)];
+                            grid[ry][rx] = { type: 'FLOOR', floorVariant: floorVar };
                         }
                     }
                 });
@@ -675,7 +680,7 @@
                     for(let x = h_start; x <= h_end; x++) {
                         for(let dy = -1; dy <= 1; dy++) { // 3 tiles wide
                             if (grid[start.y + dy] && grid[start.y + dy][x]) {
-                                grid[start.y + dy][x] = { type: 'FLOOR' };
+                                grid[start.y + dy][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
                             }
                         }
                     }
@@ -686,7 +691,7 @@
                     for(let y = v_start; y <= v_end; y++) {
                         for(let dx = -1; dx <= 1; dx++) { // 3 tiles wide
                             if (grid[y] && grid[y][end.x + dx]) {
-                                grid[y][end.x + dx] = { type: 'FLOOR' };
+                                grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
                             }
                         }
                     }
@@ -722,7 +727,7 @@
                     }
                 });
 
-                // Autotile walls
+                // Autotile walls & Place Scenery
                 for (let y = 0; y < MAP_HEIGHT; y++) {
                     for (let x = 0; x < MAP_WIDTH; x++) {
                         if (grid[y][x].type === 'WALL') {
@@ -742,6 +747,11 @@
                             else if (left && !right) grid[y][x].type = 'WALL_L';
                             else if (above && below) grid[y][x].type = 'WALL_V';
                             else if (left && right) grid[y][x].type = 'WALL_H';
+                        } else if (grid[y][x].type === 'FLOOR') {
+                             const isWall = (nx, ny) => grid[ny]?.[nx]?.type !== 'FLOOR';
+                             if(isWall(x, y-1) && Math.random() < 0.05) { // 5% chance to place scenery below a wall
+                                grid[y][x].scenery = scenerySprites[Math.floor(Math.random() * scenerySprites.length)];
+                             }
                         }
                     }
                 }
@@ -981,3 +991,4 @@
     </script>
 </body>
 </html>
+
