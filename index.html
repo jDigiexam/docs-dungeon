@@ -191,10 +191,7 @@
             {sx: 3*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 1*SPRITE_SIZE, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE, sheet: 'monsters'},
             {sx: 0, sy: 0, sheet: 'giants'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'giants'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'giants'}
         ];
-        const clueSprites = [ 
-            {sx: 3*SPRITE_SIZE, sy: 0}, {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, 
-            {sx: 0, sy: 5*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 5*SPRITE_SIZE}, {sx: 2*SPRITE_SIZE, sy: 5*SPRITE_SIZE} 
-        ];
+        const clueSprite = {sx: 1*SPRITE_SIZE, sy: 0}; 
         const weaponSprite = {sx: 3*SPRITE_SIZE, sy: 1*SPRITE_SIZE}; 
         const scenerySprites = [ {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 2*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 4*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 0, sy: 2*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 2*SPRITE_SIZE} ];
 
@@ -423,10 +420,7 @@
 
             gameState.clues.forEach(clue => {
                 if (clue.level === levelId && !clue.collectedByTeams.includes(myTeamId)) {
-                    const spriteInfo = clueSprites[clue.spriteIndex];
-                    if (spriteInfo) {
-                         ctx.drawImage(assets.items, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    }
+                    ctx.drawImage(assets.items, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
             });
         }
