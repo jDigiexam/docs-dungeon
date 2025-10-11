@@ -178,7 +178,7 @@
             WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
             WALL_TR: [14, 4], WALL_BL: [12, 6], WALL_BR: [14, 6], WALL_T: [13, 6],
             WALL_B: [13, 5], WALL_L: [14, 5], WALL_R: [12, 5], WALL_CROSS: [13,5],
-            ELEVATOR: [5, 1],
+            STAIRS: [4, 1],
         };
 
         const sprites = {
@@ -273,7 +273,7 @@
 
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
-                isMonster: false, hasWeapon: false, lastElevatorUse: 0,
+                isMonster: false, hasWeapon: false, lastStairsUse: 0,
                 spriteStyle: spriteStyleSelect.value
             };
 
@@ -290,7 +290,7 @@
             checkClueCollection();
             checkWeaponCollection();
             checkPlayerCollisions();
-            checkElevatorUse();
+            checkStairsUse();
             drawGame();
             requestAnimationFrame(gameLoop);
         }
@@ -399,7 +399,7 @@
                         let [sx, sy] = tileMap[tile.type] || tileMap.WALL_CROSS;
                         ctx.drawImage(assets.tiles, sx * SPRITE_SIZE, sy * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
 
-                        if (tile.type === 'ELEVATOR') {
+                        if (tile.type === 'STAIRS') {
                             ctx.fillStyle = 'white';
                             ctx.font = `${TILE_SIZE * 0.8}px monospace`;
                             ctx.textAlign = 'center';
@@ -569,8 +569,13 @@
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
             const gridY2 = Math.floor((y + playerSize) / TILE_SIZE);
 
-            return levelGrid[gridY1]?.[gridX1]?.type !== 'FLOOR' || levelGrid[gridY1]?.[gridX2]?.type !== 'FLOOR' ||
-                   levelGrid[gridY2]?.[gridX1]?.type !== 'FLOOR' || levelGrid[gridY2]?.[gridX2]?.type !== 'FLOOR';
+            const check = (gx, gy) => {
+                const tile = levelGrid[gy]?.[gx];
+                return !tile || tile.type.startsWith('WALL');
+            }
+
+            return check(gridX1, gridY1) || check(gridX2, gridY1) ||
+                   check(gridX1, gridY2) || check(gridX2, gridY2);
         }
 
         function updateMyPlayerPosition() {
@@ -616,25 +621,25 @@
                 A: {
                     elevators: [],
                     rooms: [
-                        {x:2, y:2, w:20, h:16}, {x:30, y:2, w:16, h:20}, {x:52, y:2, w:24, h:14},
-                        {x:4, y:24, w:16, h:16}, {x:60, y:30, w:20, h:20}, {x:30, y:50, w:24, h:16},
-                        {x:4, y:50, w:18, h:14}, {x:70, y:56, w:20, h:16}
+                        {x:2, y:2, w:12, h:10}, {x:20, y:2, w:10, h:12}, {x:35, y:2, w:15, h:9},
+                        {x:4, y:20, w:10, h:10}, {x:40, y:20, w:12, h:12}, {x:20, y:30, w:15, h:10},
+                        {x:4, y:35, w:11, h:9}, {x:45, y:35, w:12, h:10}
                     ]
                 },
                 B: {
                     elevators: [],
                     rooms: [
-                        {x:2, y:2, w:24, h:16}, {x:36, y:2, w:18, h:18}, {x:60, y:10, w:16, h:20},
-                        {x:10, y:30, w:20, h:20}, {x:40, y:36, w:20, h:16}, {x:70, y:40, w:24, h:20},
-                        {x:4, y:56, w:16, h:16}, {x:30, y:60, w:20, h:14}
+                        {x:2, y:2, w:15, h:10}, {x:22, y:2, w:11, h:11}, {x:38, y:5, w:10, h:12},
+                        {x:5, y:18, w:12, h:12}, {x:25, y:22, w:12, h:10}, {x:42, y:25, w:15, h:12},
+                        {x:2, y:35, w:10, h:10}, {x:20, y:38, w:12, h:9}
                     ]
                 },
                 C: {
                     elevators: [],
                     rooms: [
-                         {x:2, y:2, w:20, h:20}, {x:30, y:10, w:16, h:16}, {x:60, y:4, w:24, h:18},
-                         {x:4, y:30, w:16, h:16}, {x:36, y:36, w:20, h:20}, {x:70, y:30, w:20, h:16},
-                         {x:10, y:56, w:24, h:16}, {x:50, y:60, w:20, h:14}
+                         {x:2, y:2, w:12, h:12}, {x:20, y:5, w:10, h:10}, {x:35, y:2, w:15, h:11},
+                         {x:4, y:20, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10},
+                         {x:5, y:35, w:15, h:10}, {x:30, y:38, w:12, h:9}
                     ]
                 }
             };
@@ -714,7 +719,7 @@
                         }
                         
                          if (grid[elevatorY]?.[elevatorX]?.type === 'FLOOR') {
-                             grid[elevatorY][elevatorX] = { type: 'ELEVATOR', targetLevel: targetLevelId };
+                             grid[elevatorY][elevatorX] = { type: 'STAIRS', targetLevel: targetLevelId };
                              levelData[levelId].elevators.push({ x: elevatorX, y: elevatorY, target: targetLevelId });
                         }
                     }
@@ -724,7 +729,7 @@
                 for (let y = 0; y < MAP_HEIGHT; y++) {
                     for (let x = 0; x < MAP_WIDTH; x++) {
                         if (grid[y][x].type === 'WALL') {
-                            const isFloor = (nx, ny) => grid[ny]?.[nx]?.type === 'FLOOR';
+                            const isFloor = (nx, ny) => grid[ny]?.[nx]?.type !== 'WALL';
                             const above = isFloor(x, y-1);
                             const below = isFloor(x, y+1);
                             const left = isFloor(x-1, y);
@@ -834,12 +839,12 @@
             }
         }
 
-        function checkElevatorUse() {
+        function checkStairsUse() {
             const player = gameState.players[myPlayerId];
             if (!player) return;
 
             const now = Date.now();
-            if (player.lastElevatorUse && now - player.lastElevatorUse < 500) { // Half-second cooldown
+            if (player.lastStairsUse && now - player.lastStairsUse < 500) { // Half-second cooldown
                 return;
             }
 
@@ -847,33 +852,33 @@
             const playerCellY = Math.floor(player.y / TILE_SIZE);
             const tile = gameState.levels[player.level]?.grid[playerCellY]?.[playerCellX];
 
-            if (tile && tile.type === 'ELEVATOR') {
-                player.lastElevatorUse = now;
+            if (tile && tile.type === 'STAIRS') {
+                player.lastStairsUse = now;
                 const currentLevelId = player.level;
                 player.level = tile.targetLevel;
                 
                  const targetLevelData = gameState.levels[player.level];
-                 let destElevatorX, destElevatorY;
+                 let destStairsX, destStairsY;
 
-                 // Find the corresponding elevator on the target level
+                 // Find the corresponding stairs on the target level
                  for (let y = 0; y < MAP_HEIGHT; y++) {
                      for (let x = 0; x < MAP_WIDTH; x++) {
                          const targetTile = targetLevelData.grid[y][x];
-                         if (targetTile.type === 'ELEVATOR' && targetTile.targetLevel === currentLevelId) {
-                            destElevatorX = x;
-                            destElevatorY = y;
+                         if (targetTile.type === 'STAIRS' && targetTile.targetLevel === currentLevelId) {
+                            destStairsX = x;
+                            destStairsY = y;
                             break;
                          }
                      }
-                     if(destElevatorX !== undefined) break;
+                     if(destStairsX !== undefined) break;
                  }
 
-                 if (destElevatorX !== undefined) {
-                     // Find a valid floor tile next to the destination elevator to spawn on
+                 if (destStairsX !== undefined) {
+                     // Find a valid floor tile next to the destination stairs to spawn on
                      const offsets = [{dx: 0, dy: 1}, {dx: 0, dy: -1}, {dx: 1, dy: 0}, {dx: -1, dy: 0}];
                      for (const offset of offsets) {
-                         const spawnX = destElevatorX + offset.dx;
-                         const spawnY = destElevatorY + offset.dy;
+                         const spawnX = destStairsX + offset.dx;
+                         const spawnY = destStairsY + offset.dy;
                          if(targetLevelData.grid[spawnY]?.[spawnX]?.type === 'FLOOR') {
                              player.x = (spawnX + 0.5) * TILE_SIZE;
                              player.y = (spawnY + 0.5) * TILE_SIZE;
