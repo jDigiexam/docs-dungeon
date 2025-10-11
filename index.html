@@ -355,6 +355,7 @@
 
             const cameraX = myPlayer.x - (canvas.width / 2 / CAMERA_ZOOM);
             const cameraY = myPlayer.y - (canvas.height / 2 / CAMERA_ZOOM);
+            ctx.translate(-cameraX, -cameraY);
 
             ctx.fillStyle = 'black';
             ctx.fillRect(cameraX, cameraY, canvas.width / CAMERA_ZOOM, canvas.height / CAMERA_ZOOM);
@@ -365,18 +366,17 @@
             }
 
             drawLevel(myPlayer.level, cameraX, cameraY);
-            drawClues(myPlayer.level, cameraX, cameraY);
-            drawWeapon(myPlayer.level, cameraX, cameraY);
+            drawClues(myPlayer.level);
+            drawWeapon(myPlayer.level);
             
             Object.values(gameState.players).forEach(player => {
                 if (player.level === myPlayer.level) {
-                    drawPlayer(player, cameraX, cameraY);
+                    drawPlayer(player);
                 }
             });
 
             ctx.restore();
             
-            // Fog of war is drawn outside the scaled context
             drawFogOfWar();
         }
         
@@ -388,7 +388,6 @@
             ctx.fillStyle = 'black';
             ctx.beginPath();
             ctx.rect(0, 0, canvas.width, canvas.height);
-            // The arc needs to be drawn in screen space, not world space
             const playerScreenX = canvas.width / 2;
             const playerScreenY = canvas.height / 2;
             ctx.arc(playerScreenX, playerScreenY, SIGHT_RADIUS * TILE_SIZE * CAMERA_ZOOM, 0, Math.PI * 2, true); 
@@ -396,7 +395,7 @@
             ctx.restore();
         }
         
-        function drawPlayer(player, cameraX, cameraY) {
+        function drawPlayer(player) {
             const spriteDef = sprites[player.spriteStyle];
             if (!spriteDef) return;
 
@@ -417,8 +416,7 @@
             } else if (player.isMonster) {
                 colors = { hair: '#111827', shirt: '#991b1b', pants: '#1f2937', skin: '#dc2626', shoes: '#000000', tie: '#000000', glasses: '#000', ears: '#111827', overalls: '#991b1b' };
             }
-            // Draw player relative to camera
-            drawPlayerSprite(ctx, spriteDef, colors, player.x - cameraX, player.y - cameraY, SPRITE_RENDER_SCALE);
+            drawPlayerSprite(ctx, spriteDef, colors, player.x, player.y, SPRITE_RENDER_SCALE);
         }
 
         function drawPlayerSprite(context, spriteDef, colors, centerX, centerY, scale) {
@@ -474,7 +472,7 @@
             }
         }
 
-        function drawClues(levelId, cameraX, cameraY) {
+        function drawClues(levelId) {
             const myTeamId = gameState.players[myPlayerId]?.teamId;
             if (!myTeamId) return;
 
@@ -490,7 +488,7 @@
             });
         }
         
-        function drawWeapon(levelId, cameraX, cameraY) {
+        function drawWeapon(levelId) {
             const myTeamId = gameState.players[myPlayerId]?.teamId;
             if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
 
@@ -952,4 +950,3 @@
     </script>
 </body>
 </html>
-
