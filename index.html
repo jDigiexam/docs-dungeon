@@ -454,6 +454,10 @@
                 -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE
             );
 
+            if (player.hasWeapon) {
+                 ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, TILE_SIZE / 4, -TILE_SIZE / 4, TILE_SIZE, TILE_SIZE);
+            }
+
             ctx.restore();
         }
         
@@ -507,10 +511,7 @@
         }
         
         function drawWeapon(levelId) {
-            const myTeamId = gameState.players[myPlayerId]?.teamId;
-            if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
-
-            ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, gameState.weapon.x * TILE_SIZE, gameState.weapon.y * TILE_SIZE, TILE_SIZE * 1.5, TILE_SIZE * 1.5);
+             // This function is no longer needed to draw the weapon on the map
         }
 
         function drawMinimap() {
@@ -589,17 +590,8 @@
                         clue.collectedByTeams.push(payload.teamId);
                     }
                 })
-                .on('broadcast', { event: 'weapon_spawn' }, ({ payload }) => {
-                    if (payload.teamId === gameState.players[myPlayerId]?.teamId) {
-                        gameState.weapon.x = payload.x;
-                        gameState.weapon.y = payload.y;
-                        gameState.weapon.level = payload.level;
-                        gameState.weapon.spawnedForTeam = payload.teamId;
-                    }
-                })
                 .on('broadcast', { event: 'weapon_collect' }, ({ payload }) => {
                     if (gameState.players[payload.playerId]) gameState.players[payload.playerId].hasWeapon = true;
-                    if (gameState.weapon.spawnedForTeam === payload.teamId) gameState.weapon.spawnedForTeam = null;
                 })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
                     const me = gameState.players[myPlayerId];
@@ -635,15 +627,15 @@
                     const presenceState = gameChannel.presenceState();
                     // Clear local players that are no longer in presence
                     for (const id in gameState.players) {
-                        if (!Object.values(presenceState).some(pArr => pArr[0].player_id === id)) {
+                        if (!Object.values(presenceState).some(pArr => pArr[0].id === id)) {
                             delete gameState.players[id];
                         }
                     }
                     // Add/update players from presence
                     Object.values(presenceState).forEach(presenceArr => {
                         const p = presenceArr[0];
-                        if(!gameState.players[p.player_id]) {
-                            gameState.players[p.player_id] = p;
+                        if(!gameState.players[p.id]) {
+                            gameState.players[p.id] = p;
                         }
                     });
                     
@@ -659,12 +651,12 @@
                 })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
                     leftPresences.forEach(p => {
-                        delete gameState.players[p.player_id];
-                        if (peerConnections[p.player_id]) {
-                            peerConnections[p.player_id].close();
-                            delete peerConnections[p.player_id];
+                        delete gameState.players[p.id];
+                        if (peerConnections[p.id]) {
+                            peerConnections[p.id].close();
+                            delete peerConnections[p.id];
                         }
-                        const videoElement = document.getElementById(`video-${p.player_id}`);
+                        const videoElement = document.getElementById(`video-${p.id}`);
                         if (videoElement) videoElement.remove();
                     });
                     updatePlayerListUI();
@@ -679,7 +671,6 @@
         
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
-        function broadcastWeaponSpawn(teamId, x, y, level) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y, level } }); }
         function broadcastWeaponCollect(playerId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_collect', payload: { playerId, teamId } }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
@@ -1053,7 +1044,11 @@
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myTeamId)).length;
             cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
             if (collectedCount === NUM_CLUES && !gameState.weapon.spawnedForTeam) {
-                spawnWeapon(myTeamId);
+                const player = gameState.players[myPlayerId];
+                if (player) {
+                    player.hasWeapon = true;
+                    broadcastWeaponCollect(player.id, player.teamId);
+                }
             }
         }
         
