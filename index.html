@@ -18,7 +18,7 @@
     <!-- UI Panel (Left Side on Desktop, Bottom on Mobile) --><div id="ui-panel" class="w-full md:w-72 lg:w-96 bg-gray-800 p-4 flex flex-col space-y-2 overflow-y-auto order-last md:order-first h-1/3 md:h-full">
         <!-- Status & Clues --><div class="bg-gray-900/50 p-2 rounded">
             <div id="status-text" class="text-lg">Status: Alive</div>
-            <div id="clues-text" class="text-lg">Clues Found: 0/7</div>
+            <div id="clues-text" class="text-lg">Chests Found: 0/7</div>
         </div>
         
         <!-- Video Streams --><div class="flex space-x-2">
@@ -945,7 +945,7 @@
         function updateClueCounter() {
             const myTeamId = gameState.players[myPlayerId]?.teamId; if (!myTeamId) return;
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myTeamId)).length;
-            cluesText.textContent = `Clues Found: ${collectedCount}/${NUM_CLUES}`;
+            cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
             if (collectedCount === NUM_CLUES && !gameState.weapon.spawnedForTeam) {
                 spawnWeapon(myTeamId);
             }
