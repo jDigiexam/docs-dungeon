@@ -495,6 +495,7 @@
 
         function drawNpcs() {
             const myPlayer = gameState.players[myPlayerId];
+            if (!gameState.npcs) return;
             gameState.npcs.forEach(npc => {
                 if (npc.level === myPlayer.level) {
                     const { sprite } = npc;
@@ -668,6 +669,7 @@
                             gameOverScreen.style.display = 'flex';
                             setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
                         }
+                        checkAllMonstersCondition();
                     }
                 })
                 .on('broadcast', { event: 'player_resurrected' }, ({ payload }) => {
@@ -692,6 +694,16 @@
                             statusText.textContent = 'Status: MONSTER';
                             requestAnimationFrame(gameLoop);
                         }
+                        checkAllMonstersCondition();
+                    }
+                })
+                .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
+                    if (gameState.gamePhase === 'playing') {
+                        gameState.gamePhase = 'gameover';
+                        document.getElementById('dungeon-music').pause();
+                        gameOverText.textContent = 'Game Over';
+                        gameOverSubtext.textContent = payload.message;
+                        gameOverScreen.style.display = 'flex';
                     }
                 })
                 .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
@@ -756,8 +768,8 @@
         function broadcastPlayerResurrected(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_resurrected', payload: { playerId } }); }
         function broadcastForceTurnMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'force_turn_monster', payload: { playerId, monsterSpriteIndex } }); }
         function broadcastClueCollected(clueId, playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_collected', payload: { clueId, playerId } }); }
-
-
+        function broadcastMonstersWin(message) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monsters_win', payload: { message } }); }
+        
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: 0 };
@@ -802,7 +814,7 @@
         }
         
         // --- 6. GAME MECHANICS ---
-        function generateLevels() {
+   function generateLevels() {
             const levels = {}, levelNames = ['A', 'B', 'C'];
             const levelData = {
                 A: { rooms: [ {x:5, y:5, w:10, h:8}, {x:20, y:8, w:10, h:10}, {x:40, y:5, w:15, h:10}, {x:45, y:20, w:10, h:10}, {x:5, y:25, w:15, h:15}, {x:30, y:35, w:15, h:10}, {x:25, y:20, w:10, h:10} ] },
