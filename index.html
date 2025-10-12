@@ -151,6 +151,7 @@
         let myPlayerId = null;
         let gameChannel = null;
         let selectedSpriteKey = 'red_wizard';
+        let lastTime = 0;
         
         // Game Constants
         const TILE_SIZE = 128;
@@ -159,8 +160,8 @@
         const MAP_HEIGHT = 50;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 5;
-        const PLAYER_SPEED = 10; 
-        const MONSTER_SPEED = 11;
+        const PLAYER_SPEED = 600; 
+        const MONSTER_SPEED = 600;
         const SIGHT_RADIUS = 6;
         const CAMERA_ZOOM = 0.5;
         const DEATH_TIMER_DURATION = 30000; // 30 seconds
@@ -173,7 +174,7 @@
         let isCamOn = false;
 
         // Asset Loading
-        const assets = { tiles: new Image(), chars: new Image(), items: new Image(), scenery: new Image(), giants: new Image() };
+        const assets = { tiles: new Image(), chars: new Image(), items: new Image(), monsters: new Image(), scenery: new Image(), giants: new Image() };
         let assetsLoadedCount = 0;
         
         const tileMap = {
@@ -359,31 +360,37 @@
             }
         }
         
-        function gameLoop() {
-            if (gameState.players[myPlayerId]?.isHost) {
-                checkDeathTimers();
-            }
+        function gameLoop(timestamp) {
+    if (!lastTime) {
+        lastTime = timestamp;
+    }
+    const deltaTime = (timestamp - lastTime) / 1000; // Time in seconds since last frame
+    lastTime = timestamp;
 
-            if (gameState.gamePhase !== 'playing') {
-                requestAnimationFrame(gameLoop);
-                return;
-            }
+    if (gameState.players[myPlayerId]?.isHost) {
+        checkDeathTimers();
+    }
 
-            if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
-                drawGame(); // Still render the game so the dead player can spectate
-                requestAnimationFrame(gameLoop);
-                return;
-            }
-            
-            updateMyPlayerPosition();
-            checkClueCollection();
-            checkPlayerCollisions();
-            checkResurrection();
-            checkStairsUse();
-            drawGame();
-            requestAnimationFrame(gameLoop);
-        }
-
+    if (gameState.gamePhase !== 'playing') {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    // Pass deltaTime to the functions that need it
+    if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
+        drawGame(deltaTime); 
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    updateMyPlayerPosition(deltaTime); // Pass deltaTime here
+    checkClueCollection();
+    checkPlayerCollisions();
+    checkResurrection();
+    checkStairsUse();
+    drawGame(deltaTime); // Pass deltaTime here
+    requestAnimationFrame(gameLoop);
+}
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
             const myPlayer = gameState.players[myPlayerId];
@@ -674,17 +681,21 @@
             return check(gx1, gy1) || check(gx2, gy1) || check(gx1, gy2) || check(gx2, gy2);
         }
 
-        function updateMyPlayerPosition() {
+        function updateMyPlayerPosition(deltaTime) { // Accept deltaTime
             const player = gameState.players[myPlayerId];
             if (!player || player.status !== 'alive') return;
             const currentLevel = gameState.levels[player.level];
             if (!currentLevel) return;
+    
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
+
             if (mag > 0) {
-                const speed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
-                const moveX = (dx / mag) * speed, moveY = (dy / mag) * speed;
+            const speed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
+                // Multiply by deltaTime to get frame-independent speed
+                const moveX = (dx / mag) * speed * deltaTime;
+                const moveY = (dy / mag) * speed * deltaTime;
                 if (Math.abs(moveX) > 0.1) player.direction = moveX > 0 ? 'right' : 'left';
                 let targetX = player.x + moveX, targetY = player.y + moveY;
                 if (isColliding(targetX, targetY, currentLevel.grid)) {
