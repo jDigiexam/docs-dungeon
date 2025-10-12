@@ -185,11 +185,11 @@
         };
 
         const sprites = {
-            red_wizard:      {sx: 0, sy: 0, name: "Red Wizard"}, orange_wizard:   {sx: 128, sy: 0, name: "Orange Wizard"}, blue_wizard:     {sx: 256, sy: 0, name: "Blue Wizard"}, green_wizard:    {sx: 384, sy: 0, name: "Green Wizard"},
-            dark_wizard:     {sx: 0,   sy: 128, name: "Dark Wizard"}, pink_wizard:     {sx: 128, sy: 128, name: "Pink Wizard"}, grey_wizard:     {sx: 256, sy: 128, name: "Grey Wizard"}, fire_wizard:     {sx: 384, sy: 128, name: "Fire Wizard"},
-            lime_wizard:     {sx: 0,   sy: 256, name: "Lime Wizard"}, sky_wizard:      {sx: 128, sy: 256, name: "Sky Wizard"}, white_wizard:    {sx: 256, sy: 256, name: "White Wizard"}, yellow_wizard:   {sx: 384, sy: 256, name: "Yellow Wizard"},
-            brown_wizard:    {sx: 0,   sy: 384, name: "Brown Wizard"}, dark_knight:     {sx: 128, sy: 384, name: "Dark Knight"}, silver_knight:   {sx: 256, sy: 384, name: "Silver Knight"}, horned_knight:   {sx: 384, sy: 384, name: "Horned Knight"},
-            white_knight:    {sx: 0,   sy: 512, name: "White Knight"}, villager:        {sx: 128, sy: 512, name: "Villager"}, ranger:          {sx: 256, sy: 512, name: "Ranger"},
+            red_wizard: {sx:0,sy:0,name:"Red Wizard"}, orange_wizard: {sx:128,sy:0,name:"Orange Wizard"}, blue_wizard: {sx:256,sy:0,name:"Blue Wizard"}, green_wizard: {sx:384,sy:0,name:"Green Wizard"},
+            dark_wizard: {sx:0,sy:128,name:"Dark Wizard"}, pink_wizard: {sx:128,sy:128,name:"Pink Wizard"}, grey_wizard: {sx:256,sy:128,name:"Grey Wizard"}, fire_wizard: {sx:384,sy:128,name:"Fire Wizard"},
+            lime_wizard: {sx:0,sy:256,name:"Lime Wizard"}, sky_wizard: {sx:128,sy:256,name:"Sky Wizard"}, white_wizard: {sx:256,sy:256,name:"White Wizard"}, yellow_wizard: {sx:384,sy:256,name:"Yellow Wizard"},
+            brown_wizard: {sx:0,sy:384,name:"Brown Wizard"}, dark_knight: {sx:128,sy:384,name:"Dark Knight"}, silver_knight: {sx:256,sy:384,name:"Silver Knight"}, horned_knight: {sx:384,sy:384,name:"Horned Knight"},
+            white_knight: {sx:0,sy:512,name:"White Knight"}, villager: {sx:128,sy:512,name:"Villager"}, ranger: {sx:256,sy:512,name:"Ranger"},
         };
         
         const giantSprites = [
@@ -619,7 +619,7 @@
                         resurrectedPlayer.deathTimestamp = null;
                         if (payload.playerId === myPlayerId) {
                             statusText.textContent = 'Status: Alive';
-                            gameLoop(performance.now()); 
+                            requestAnimationFrame(gameLoop);
                         }
                     }
                 })
@@ -632,7 +632,7 @@
                         player.deathTimestamp = null;
                         if (payload.playerId === myPlayerId) {
                             statusText.textContent = 'Status: MONSTER';
-                            gameLoop(performance.now());
+                            requestAnimationFrame(gameLoop);
                         }
                     }
                 })
@@ -784,7 +784,9 @@
         
         function checkResurrection() {
             const me = gameState.players[myPlayerId];
-            if (!me || me.status !== 'alive') return;
+            if (!me || me.status !== 'alive' || me.isMonster) {
+                return;
+            }
             for (const otherId in gameState.players) {
                 if (otherId === myPlayerId) continue;
                 const other = gameState.players[otherId];
