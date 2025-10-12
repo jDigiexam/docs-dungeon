@@ -20,10 +20,8 @@
             <div id="clues-text" class="text-lg">Chests Found: 0/7</div>
         </div>
         
-        <!-- MODIFIED: Replaced old video divs with a single dynamic grid container -->
         <div id="video-streams-container" class="grid grid-cols-1 gap-2 aspect-video">
-            <!-- Video elements will be dynamically added here by JavaScript -->
-        </div>
+            </div>
 
         <div class="flex justify-center space-x-4">
             <button id="toggle-mic-btn" class="p-3 bg-red-600 rounded-full hover:bg-red-500 text-white transition-colors">
@@ -141,7 +139,7 @@
         const characterGrid = document.getElementById('character-grid');
 
         // Game State
-        const gameState = { players: {}, levels: {}, clues: [], gamePhase: 'loading' };
+        const gameState = { players: {}, levels: {}, clues: [], npcs: [], gamePhase: 'loading' };
         let myPlayerId = null;
         let gameChannel = null;
         let selectedSpriteKey = 'red_wizard';
@@ -189,6 +187,11 @@
         const giantSprites = [
             {sx: 0,   sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 256, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
             {sx: 0,   sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 256, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 512, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
+        ];
+
+        const npcMonsterSprites = [
+            {sx: 0,   sy: 0, sheet: 'monsters'}, {sx: 128, sy: 0, sheet: 'monsters'}, {sx: 256, sy: 0, sheet: 'monsters'},
+            {sx: 384, sy: 0, sheet: 'monsters'}, {sx: 0,   sy: 128, sheet: 'monsters'}, {sx: 128, sy: 128, sheet: 'monsters'},
         ];
 
         const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
@@ -297,6 +300,7 @@
             const levelNames = Object.keys(levels);
             const hunters = Object.values(gameState.players).filter(p => p.id !== monsterId);
             const monster = gameState.players[monsterId];
+            const npcs = spawnNpcs(levels, 10);
 
             hunters.forEach(hunter => {
                 const randomLevelName = levelNames[Math.floor(Math.random() * levelNames.length)];
@@ -345,7 +349,7 @@
                 monster.monsterSpriteIndex = monsterSpriteIndex;
             }
 
-            const initialState = { players: gameState.players, levels: levels, clues: clues };
+            const initialState = { players: gameState.players, levels: levels, clues: clues, npcs: npcs };
             gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
         });
 
@@ -366,6 +370,7 @@
             gameState.players = initialState.players;
             gameState.levels = initialState.levels;
             gameState.clues = initialState.clues;
+            gameState.npcs = initialState.npcs;
             readyRoomScreen.style.display = 'none';
             gameScreen.style.display = 'block';
             gameStatusPanel.style.display = 'block';
@@ -407,6 +412,13 @@
                 return;
             }
 
+            // Let the host control NPC movement and broadcast it
+            if (gameState.players[myPlayerId]?.isHost) {
+                updateNpcs(deltaTime);
+                // Simple broadcast for NPCs - can be optimized later if needed
+                if(gameChannel) gameChannel.send({type: 'broadcast', event: 'npcs_update', payload: gameState.npcs});
+            }
+
             if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
                 drawGame(); 
                 requestAnimationFrame(gameLoop);
@@ -437,6 +449,7 @@
             if (!gameState.levels[myPlayer.level]) { ctx.restore(); return; }
             drawLevel(myPlayer.level, cameraX, cameraY);
             drawClues(myPlayer.level);
+            drawNpcs();
             Object.values(gameState.players).forEach(player => {
                 if (player.status === 'alive' && player.level === myPlayer.level) {
                     drawPlayer(player);
@@ -453,6 +466,23 @@
             Object.values(gameState.players).forEach(player => {
                 if (player.status === 'dead' && player.level === myPlayer.level) {
                     ctx.drawImage(assets.scenery, tombstoneSprite.sx, tombstoneSprite.sy, SPRITE_SIZE, SPRITE_SIZE, player.x - TILE_SIZE / 2, player.y - TILE_SIZE / 2, TILE_SIZE, TILE_SIZE);
+                }
+            });
+        }
+
+        function drawNpcs() {
+            const myPlayer = gameState.players[myPlayerId];
+            gameState.npcs.forEach(npc => {
+                if (npc.level === myPlayer.level) {
+                    const { sprite } = npc;
+                    const spritesheet = assets[sprite.sheet];
+                    ctx.save();
+                    ctx.translate(Math.floor(npc.x), Math.floor(npc.y));
+                    if (npc.direction === 'left') {
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.drawImage(spritesheet, sprite.sx, sprite.sy, SPRITE_SIZE, SPRITE_SIZE, -TILE_SIZE/2, -TILE_SIZE/2, TILE_SIZE, TILE_SIZE);
+                    ctx.restore();
                 }
             });
         }
@@ -591,6 +621,11 @@
                     if (gameState.gamePhase === 'lobby') { gameState.players[payload.id].isReady = payload.isReady; checkHostAndReadyStatus(); } 
                     else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) Object.assign(gameState.players[payload.id], payload);
                 })
+                .on('broadcast', { event: 'npcs_update' }, ({ payload }) => {
+                    if (gameState.gamePhase === 'playing' && !gameState.players[myPlayerId]?.isHost) {
+                        gameState.npcs = payload;
+                    }
+                })
                 .on('broadcast', { event: 'init_game_state' }, ({ payload }) => startGame(payload))
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
                     const deadPlayer = gameState.players[payload.playerId];
@@ -658,6 +693,7 @@
                         const videoEl = document.getElementById(`video-container-${pId}`);
                         if (videoEl) videoEl.remove();
                     });
+                    updateVideoGridLayout();
                 })
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') await gameChannel.track(gameState.players[myPlayerId]); });
         }
@@ -763,6 +799,55 @@
             return clues;
         }
         
+        function spawnNpcs(levels, count) {
+            const npcs = [];
+            const levelNames = Object.keys(levels);
+            for (let i = 0; i < count; i++) {
+                const randomLevelName = levelNames[Math.floor(Math.random() * levelNames.length)];
+                const randomLevel = levels[randomLevelName];
+                const startRoom = randomLevel.rooms[Math.floor(Math.random() * randomLevel.rooms.length)];
+                const sprite = npcMonsterSprites[Math.floor(Math.random() * npcMonsterSprites.length)];
+                npcs.push({
+                    id: `npc_${i}`,
+                    x: (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE,
+                    y: (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE,
+                    level: randomLevelName,
+                    sprite: sprite,
+                    direction: 'right',
+                    moveTimer: Math.random() * 3,
+                    moveDirection: {x: 0, y: 0}
+                });
+            }
+            return npcs;
+        }
+
+        function updateNpcs(deltaTime) {
+            const NPC_SPEED = 150;
+            gameState.npcs.forEach(npc => {
+                npc.moveTimer -= deltaTime;
+                if (npc.moveTimer <= 0) {
+                    const roll = Math.random();
+                    if (roll < 0.25) npc.moveDirection = { x: 1, y: 0 };
+                    else if (roll < 0.5) npc.moveDirection = { x: -1, y: 0 };
+                    else if (roll < 0.75) npc.moveDirection = { x: 0, y: 1 };
+                    else npc.moveDirection = { x: 0, y: -1 };
+                    npc.moveTimer = Math.random() * 3 + 2;
+                }
+                const moveX = npc.moveDirection.x * NPC_SPEED * deltaTime;
+                const moveY = npc.moveDirection.y * NPC_SPEED * deltaTime;
+                if (moveX > 0) npc.direction = 'right';
+                if (moveX < 0) npc.direction = 'left';
+                const targetX = npc.x + moveX;
+                const targetY = npc.y + moveY;
+                if (!isColliding(targetX, targetY, gameState.levels[npc.level].grid)) {
+                    npc.x = targetX;
+                    npc.y = targetY;
+                } else {
+                    npc.moveTimer = 0;
+                }
+            });
+        }
+        
         function checkDeathTimers() {
             const now = Date.now();
             for (const player of Object.values(gameState.players)) {
@@ -778,9 +863,7 @@
         
         function checkResurrection() {
             const me = gameState.players[myPlayerId];
-            if (!me || me.status !== 'alive' || me.isMonster) {
-                return;
-            }
+            if (!me || me.status !== 'alive' || me.isMonster) return;
             for (const otherId in gameState.players) {
                 if (otherId === myPlayerId) continue;
                 const other = gameState.players[otherId];
@@ -797,12 +880,12 @@
             const p = gameState.players[myPlayerId];
             if(!p || !gameState.clues || p.isMonster) return;
             const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push('team1');updateClueCounter();}}); 
+            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);updateClueCounter();}}); 
         }
 
         function checkPlayerCollisions() { 
-            const me = gameState.players[myPlayerId];
-            if(!me || me.status !== 'alive') return;
+            const me=gameState.players[myPlayerId];
+            if(!me||me.status!=='alive')return;
             for(const oId in gameState.players){
                 if(oId === myPlayerId) continue;
                 const o = gameState.players[oId];
@@ -819,8 +902,10 @@
         
         function updateClueCounter() { 
             if(!gameState.clues)return;
-            const count=gameState.clues.filter(c=>c.collectedByTeams.length>0).length;cluesText.textContent=`Chests Found: ${count}/${NUM_CLUES}`;
-            if(count>=NUM_CLUES&&gameState.players[myPlayerId]&&!gameState.players[myPlayerId].hasWeapon){
+            const myId = gameState.players[myPlayerId]?.id;
+            const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myId)).length;
+            cluesText.textContent=`Chests Found: ${collectedCount}/${NUM_CLUES}`;
+            if(collectedCount>=NUM_CLUES&&gameState.players[myPlayerId]&&!gameState.players[myPlayerId].hasWeapon){
                 gameState.players[myPlayerId].hasWeapon=true;
                 broadcastPlayerState();
             }
