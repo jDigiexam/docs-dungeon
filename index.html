@@ -669,7 +669,7 @@
                             gameOverScreen.style.display = 'flex';
                             setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
                         }
-                        checkAllMonstersCondition();
+                        checkWinConditions();
                     }
                 })
                 .on('broadcast', { event: 'player_resurrected' }, ({ payload }) => {
@@ -694,14 +694,14 @@
                             statusText.textContent = 'Status: MONSTER';
                             requestAnimationFrame(gameLoop);
                         }
-                        checkAllMonstersCondition();
+                        checkWinConditions();
                     }
                 })
                 .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
                     if (gameState.gamePhase === 'playing') {
                         gameState.gamePhase = 'gameover';
                         document.getElementById('dungeon-music').pause();
-                        gameOverText.textContent = 'Game Over';
+                        gameOverText.textContent = payload.title || 'Game Over';
                         gameOverSubtext.textContent = payload.message;
                         gameOverScreen.style.display = 'flex';
                     }
@@ -768,7 +768,7 @@
         function broadcastPlayerResurrected(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_resurrected', payload: { playerId } }); }
         function broadcastForceTurnMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'force_turn_monster', payload: { playerId, monsterSpriteIndex } }); }
         function broadcastClueCollected(clueId, playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_collected', payload: { clueId, playerId } }); }
-        function broadcastMonstersWin(message) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monsters_win', payload: { message } }); }
+        function broadcastMonstersWin(title, message) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monsters_win', payload: { title, message } }); }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -922,16 +922,21 @@
             }
         }
 
-        function checkAllMonstersCondition() {
+        function checkWinConditions() {
             if (gameState.gamePhase !== 'playing') return;
             const allPlayers = Object.values(gameState.players);
-            if (allPlayers.length < 1) return; // Can be 1 if they are the only one left
+            if (allPlayers.length === 0) return;
             const livingPlayers = allPlayers.filter(p => p.status === 'alive');
-            if (livingPlayers.length === 0) return;
-            const allLivingAreMonsters = livingPlayers.every(p => p.isMonster);
-            if (allLivingAreMonsters) {
-                gameState.gamePhase = 'gameover'; 
-                broadcastMonstersWin("You and your comrades have forever become part of the dungeon.");
+            const livingHunters = livingPlayers.filter(p => !p.isMonster);
+
+            if (livingHunters.length === 0 && livingPlayers.length > 0) {
+                gameState.gamePhase = 'gameover';
+                const allTransformed = livingPlayers.every(p => p.isMonster);
+                if (allTransformed && allPlayers.length > 1) {
+                    broadcastMonstersWin("Game Over", "You and your comrades have forever become part of the dungeon.");
+                } else {
+                    broadcastMonstersWin("Monsters Win!", "All hunters have been eliminated.");
+                }
             }
         }
         
@@ -958,8 +963,8 @@
         }
 
         function checkPlayerCollisions() { 
-            const me=gameState.players[myPlayerId];
-            if(!me||me.status!=='alive')return;
+            const me = gameState.players[myPlayerId];
+            if(!me || me.status !== 'alive') return;
             for(const oId in gameState.players){
                 if(oId === myPlayerId) continue;
                 const o = gameState.players[oId];
