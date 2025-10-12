@@ -161,10 +161,10 @@
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 5;
         const PLAYER_SPEED = 600; 
-        const MONSTER_SPEED = 600;
+        const MONSTER_SPEED = 660; 
         const SIGHT_RADIUS = 6;
         const CAMERA_ZOOM = 0.5;
-        const DEATH_TIMER_DURATION = 30000; // 30 seconds
+        const DEATH_TIMER_DURATION = 30000;
 
         // WebRTC State
         let localStream;
@@ -179,29 +179,33 @@
         
         const tileMap = {
             FLOOR_VARS: [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]],
-            WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4],
-            WALL_TR: [14, 4], WALL_BL: [12, 6], WALL_BR: [14, 6], WALL_T: [13, 6],
-            WALL_B: [13, 5], WALL_L: [14, 5], WALL_R: [12, 5], WALL_CROSS: [13,5],
-            STAIRS: [4, 1],
+            WALL_V: [12, 5], WALL_H: [13, 4], WALL_TL: [12, 4], WALL_TR: [14, 4], WALL_BL: [12, 6], WALL_BR: [14, 6], WALL_T: [13, 6],
+            WALL_B: [13, 5], WALL_L: [14, 5], WALL_R: [12, 5], WALL_CROSS: [13,5], STAIRS: [4, 1],
         };
 
         const sprites = {
-            red_wizard:      {sx: 0, sy: 0, name: "Red Wizard"}, orange_wizard:   {sx: 128, sy: 0, name: "Orange Wizard"}, blue_wizard:     {sx: 256, sy: 0, name: "Blue Wizard"}, green_wizard:    {sx: 384, sy: 0, name: "Green Wizard"},
-            dark_wizard:     {sx: 0,   sy: 128, name: "Dark Wizard"}, pink_wizard:     {sx: 128, sy: 128, name: "Pink Wizard"}, grey_wizard:     {sx: 256, sy: 128, name: "Grey Wizard"}, fire_wizard:     {sx: 384, sy: 128, name: "Fire Wizard"},
-            lime_wizard:     {sx: 0,   sy: 256, name: "Lime Wizard"}, sky_wizard:      {sx: 128, sy: 256, name: "Sky Wizard"}, white_wizard:    {sx: 256, sy: 256, name: "White Wizard"}, yellow_wizard:   {sx: 384, sy: 256, name: "Yellow Wizard"},
-            brown_wizard:    {sx: 0,   sy: 384, name: "Brown Wizard"}, dark_knight:     {sx: 128, sy: 384, name: "Dark Knight"}, silver_knight:   {sx: 256, sy: 384, name: "Silver Knight"}, horned_knight:   {sx: 384, sy: 384, name: "Horned Knight"},
-            white_knight:    {sx: 0,   sy: 512, name: "White Knight"}, villager:        {sx: 128, sy: 512, name: "Villager"}, ranger:          {sx: 256, sy: 512, name: "Ranger"},
+            red_wizard: {sx:0,sy:0,name:"Red Wizard"}, orange_wizard: {sx:128,sy:0,name:"Orange Wizard"}, blue_wizard: {sx:256,sy:0,name:"Blue Wizard"}, green_wizard: {sx:384,sy:0,name:"Green Wizard"},
+            dark_wizard: {sx:0,sy:128,name:"Dark Wizard"}, pink_wizard: {sx:128,sy:128,name:"Pink Wizard"}, grey_wizard: {sx:256,sy:128,name:"Grey Wizard"}, fire_wizard: {sx:384,sy:128,name:"Fire Wizard"},
+            lime_wizard: {sx:0,sy:256,name:"Lime Wizard"}, sky_wizard: {sx:128,sy:256,name:"Sky Wizard"}, white_wizard: {sx:256,sy:256,name:"White Wizard"}, yellow_wizard: {sx:384,sy:256,name:"Yellow Wizard"},
+            brown_wizard: {sx:0,sy:384,name:"Brown Wizard"}, dark_knight: {sx:128,sy:384,name:"Dark Knight"}, silver_knight: {sx:256,sy:384,name:"Silver Knight"}, horned_knight: {sx:384,sy:384,name:"Horned Knight"},
+            white_knight: {sx:0,sy:512,name:"White Knight"}, villager: {sx:128,sy:512,name:"Villager"}, ranger: {sx:256,sy:512,name:"Ranger"},
         };
         
+        // --- MODIFIED: Added more giants ---
         const giantSprites = [
             {sx: 0,   sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
             {sx: 256, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
-            {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}
+            {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
+            {sx: 0,   sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, // Assuming a 2nd row of giants
+            {sx: 256, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
+            {sx: 512, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
         ];
 
         const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
-        const tombstoneSprite = {sx: 256, sy: 128};
-        const clueSprite = {sx: 0, sy: 0}; 
+        
+        // --- MODIFIED: Updated tombstone and chest sprites ---
+        const tombstoneSprite = {sx: 128, sy: 768}; // 2nd column, 7th row down
+        const clueSprite = {sx: 128, sy: 0}; // Golden chest on Scenery8x.png
         const weaponSprite = {sx: 384, sy: 128}; 
 
         // --- 1. INITIALIZATION ---
@@ -335,7 +339,7 @@
             gameScreen.style.display = 'block';
             gameStatusPanel.style.display = 'block';
             initJoystick();
-            gameLoop();
+            requestAnimationFrame(gameLoop); // Start the main loop
         }
 
         function initJoystick() {
@@ -361,41 +365,36 @@
         }
         
         function gameLoop(timestamp) {
-    if (!lastTime) {
-        lastTime = timestamp;
-    }
-    const deltaTime = (timestamp - lastTime) / 1000; // Time in seconds since last frame
-    lastTime = timestamp;
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
 
-    if (gameState.players[myPlayerId]?.isHost) {
-        checkDeathTimers();
-    }
+            if (gameState.players[myPlayerId]?.isHost) checkDeathTimers();
 
-    if (gameState.gamePhase !== 'playing') {
-        requestAnimationFrame(gameLoop);
-        return;
-    }
-    
-    // Pass deltaTime to the functions that need it
-    if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
-        drawGame(deltaTime); 
-        requestAnimationFrame(gameLoop);
-        return;
-    }
-    
-    updateMyPlayerPosition(deltaTime); // Pass deltaTime here
-    checkClueCollection();
-    checkPlayerCollisions();
-    checkResurrection();
-    checkStairsUse();
-    drawGame(deltaTime); // Pass deltaTime here
-    requestAnimationFrame(gameLoop);
-}
+            if (gameState.gamePhase !== 'playing') {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
+                drawGame(); 
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            updateMyPlayerPosition(deltaTime);
+            checkClueCollection();
+            checkPlayerCollisions();
+            checkResurrection();
+            checkStairsUse();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
             const myPlayer = gameState.players[myPlayerId];
             if (!ctx || !myPlayer || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
-            
             ctx.save();
             ctx.imageSmoothingEnabled = false; 
             ctx.scale(CAMERA_ZOOM, CAMERA_ZOOM);
