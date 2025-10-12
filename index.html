@@ -460,7 +460,10 @@
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
             const myPlayer = gameState.players[myPlayerId];
-            if (!ctx || !myPlayer || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
+            if (!ctx || !myPlayer || assetsLoadedCount < Object.keys(assets).length) return;
+            
+            if (gameState.gamePhase !== 'playing' && myPlayer.status === 'alive') return;
+            
             ctx.save();
             ctx.imageSmoothingEnabled = false; 
             ctx.scale(CAMERA_ZOOM, CAMERA_ZOOM);
@@ -641,15 +644,15 @@
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => {
-    if (!payload || !payload.id || !gameState.players[payload.id]) return;
-    if (gameState.gamePhase === 'lobby') { 
-        Object.assign(gameState.players[payload.id], payload); 
-        checkHostAndReadyStatus(); 
-    } 
-    else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) {
-        Object.assign(gameState.players[payload.id], payload);
-    }
-})
+                    if (!payload || !payload.id || !gameState.players[payload.id]) return;
+                    if (gameState.gamePhase === 'lobby') { 
+                        Object.assign(gameState.players[payload.id], payload); 
+                        checkHostAndReadyStatus(); 
+                    } 
+                    else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) {
+                        Object.assign(gameState.players[payload.id], payload);
+                    }
+                })
                 .on('broadcast', { event: 'npcs_update' }, ({ payload }) => {
                     if (gameState.gamePhase === 'playing' && !gameState.players[myPlayerId]?.isHost) {
                         gameState.npcs = payload;
@@ -663,25 +666,23 @@
                     }
                 })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
-    const deadPlayer = gameState.players[payload.playerId];
-    if (deadPlayer) {
-        deadPlayer.status = 'dead';
-        deadPlayer.deathTimestamp = Date.now();
-        if (payload.playerId === myPlayerId) {
-            statusText.textContent = 'Status: Dead';
-            gameOverText.textContent = 'You Have Died';
-            gameOverSubtext.textContent = 'A teammate can revive you... but hurry!';
-            gameOverScreen.style.display = 'flex';
-            setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
-        }
-        
-        // --- CHANGE IS HERE ---
-        // Only the host should check for win conditions
-        if (gameState.players[myPlayerId]?.isHost) {
-            checkWinConditions();
-        }
-    }
-})
+                    const deadPlayer = gameState.players[payload.playerId];
+                    if (deadPlayer) {
+                        deadPlayer.status = 'dead';
+                        deadPlayer.deathTimestamp = Date.now();
+                        if (payload.playerId === myPlayerId) {
+                            statusText.textContent = 'Status: Dead';
+                            gameOverText.textContent = 'You Have Died';
+                            gameOverSubtext.textContent = 'A teammate can revive you... but hurry!';
+                            gameOverScreen.style.display = 'flex';
+                            setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
+                        }
+                        
+                        if (gameState.players[myPlayerId]?.isHost) {
+                            checkWinConditions();
+                        }
+                    }
+                })
                 .on('broadcast', { event: 'player_resurrected' }, ({ payload }) => {
                     const resurrectedPlayer = gameState.players[payload.playerId];
                     if (resurrectedPlayer) {
@@ -704,8 +705,10 @@
                             statusText.textContent = 'Status: MONSTER';
                             requestAnimationFrame(gameLoop);
                         }
+                        
                         if (gameState.players[myPlayerId]?.isHost) {
-            checkWinConditions();
+                            checkWinConditions();
+                        }
                     }
                 })
                 .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
@@ -933,28 +936,24 @@
             }
         }
 
-function checkWinConditions() {
-    // This first line is now redundant because of our host check, but it's good practice
-    if (gameState.gamePhase !== 'playing') return;
-    
-    const allPlayers = Object.values(gameState.players);
-    if (allPlayers.length === 0) return;
-    
-    const livingPlayers = allPlayers.filter(p => p.status === 'alive');
-    const livingHunters = livingPlayers.filter(p => !p.isMonster && p.status === 'alive'); // Made this check more robust
+        function checkWinConditions() {
+            if (gameState.gamePhase !== 'playing') return;
+            
+            const allPlayers = Object.values(gameState.players);
+            if (allPlayers.length === 0) return;
+            
+            const livingPlayers = allPlayers.filter(p => p.status === 'alive');
+            const livingHunters = allPlayers.filter(p => !p.isMonster && p.status === 'alive');
 
-    if (livingHunters.length === 0 && livingPlayers.length > 0) {
-        // --- CHANGE IS HERE ---
-        // REMOVED: gameState.gamePhase = 'gameover'; 
-        // The function now ONLY broadcasts the result. The state change will happen when this message is received.
-        const allTransformed = livingPlayers.every(p => p.isMonster);
-        if (allTransformed && allPlayers.length > 1) {
-            broadcastMonstersWin("Game Over", "You and your comrades have forever become part of the dungeon.");
-        } else {
-            broadcastMonstersWin("Monsters Win!", "All hunters have been eliminated.");
+            if (livingHunters.length === 0 && livingPlayers.length > 0) {
+                const allTransformed = livingPlayers.every(p => p.isMonster);
+                if (allTransformed && allPlayers.length > 1) {
+                    broadcastMonstersWin("Game Over", "You and your comrades have forever become part of the dungeon.");
+                } else {
+                    broadcastMonstersWin("Monsters Win!", "All hunters have been eliminated.");
+                }
+            }
         }
-    }
-}
         
         function checkResurrection() {
             const me = gameState.players[myPlayerId];
@@ -992,12 +991,10 @@ function checkWinConditions() {
             }
         }
 
-        // --- FIXED FUNCTION ---
         function checkStairsUse() {
             const player = gameState.players[myPlayerId];
             if (!player) return;
 
-            // Cooldown to prevent rapid level switching
             const now = Date.now();
             if (player.lastStairsUse && now - player.lastStairsUse < 500) {
                 return;
@@ -1013,7 +1010,6 @@ function checkWinConditions() {
                 const targetLevelId = currentTile.targetLevel;
                 player.level = targetLevelId;
 
-                // Find the corresponding exit stairs in the new level
                 const targetLevel = gameState.levels[targetLevelId];
                 let foundExit = false;
                 for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -1032,29 +1028,23 @@ function checkWinConditions() {
             }
         }
         
-        // --- FIXED FUNCTION ---
         function updateClueCounter() {
             if (!gameState.clues) return;
             const me = gameState.players[myPlayerId];
             if (!me) return;
 
-            // Count total unique clues collected by any hunter
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
             cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
 
-            // Grant weapon to all hunters if the goal is met
             if (collectedCount >= NUM_CLUES && !me.hasWeapon) {
                 me.hasWeapon = true;
-                // Broadcast your state change so others see your weapon
                 broadcastPlayerState();
             }
         }
         
-        // --- FIXED FUNCTION ---
         function updateMonsterUI() {
             if (!gameState.clues) return;
             
-            // Calculate total unique chests collected by the hunter team
             const totalChestsCollected = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
 
             cluesText.textContent = `Threat Level: ${totalChestsCollected}/${NUM_CLUES}`;
