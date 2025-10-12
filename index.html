@@ -266,10 +266,19 @@
 
         joinGameBtn.addEventListener('click', () => {
             const lobbyMusic = document.getElementById('lobby-music');
-            lobbyMusic.volume = 0.3; 
-            if (lobbyMusic.paused) {
-                lobbyMusic.play().catch(e => console.error("Lobby music failed to play:", e));
-            }
+            const dungeonMusic = document.getElementById('dungeon-music');
+            
+            lobbyMusic.play().catch(e => {});
+            dungeonMusic.play().catch(e => {});
+
+            setTimeout(() => {
+                dungeonMusic.pause();
+                dungeonMusic.currentTime = 0;
+                lobbyMusic.volume = 0.3; 
+                if (lobbyMusic.paused) {
+                    lobbyMusic.play().catch(e => console.error("Lobby music failed to play:", e));
+                }
+            }, 50);
 
             const username = usernameInput.value.trim();
             if (!username) { usernameInput.style.borderColor = 'red'; return; }
@@ -373,6 +382,7 @@
             const dungeonMusic = document.getElementById('dungeon-music');
             lobbyMusic.pause();
             lobbyMusic.currentTime = 0;
+            
             dungeonMusic.volume = 0.4;
             if (dungeonMusic.paused) {
                 dungeonMusic.play().catch(e => console.error("Dungeon music failed to play:", e));
@@ -438,6 +448,8 @@
                 return;
             }
             
+            checkClueCollection();
+
             if (myPlayer.isMonster) {
                 updateMonsterUI();
             } else {
@@ -445,7 +457,6 @@
             }
             
             updateMyPlayerPosition(deltaTime);
-            checkClueCollection();
             checkPlayerCollisions();
             checkResurrection();
             checkStairsUse();
@@ -631,7 +642,6 @@
         }
 
         // --- 4. SUPABASE REALTIME ---
-        // ... (This section is unchanged, but included for completeness)
         async function setupSupabaseChannels() {
             const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
@@ -903,7 +913,7 @@
             const p = gameState.players[myPlayerId];
             if(!p || !gameState.clues || p.isMonster) return;
             const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);}}); 
+            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id); updateClueCounter();}}); 
         }
 
         function checkPlayerCollisions() { 
@@ -933,7 +943,7 @@
                 broadcastPlayerState();
             }
         }
-
+        
         function updateMonsterUI() {
             if (!gameState.clues) return;
             let maxChests = 0;
@@ -948,6 +958,7 @@
         
         // --- 7. WEBRTC & 8. CHAT ---
         async function startLocalMedia() { 
+            const lobbyMusic = document.getElementById('lobby-music');
             try { 
                 localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
                 createVideoElement(myPlayerId, localStream, "YOU (Me)", true);
@@ -956,7 +967,13 @@
                 localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);
                 localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);
                 updateMediaButtons(); 
-            } catch(e){console.error("Error accessing media devices.",e);}
+            } catch(e){
+                console.error("Error accessing media devices.",e);
+            } finally {
+                if (lobbyMusic && lobbyMusic.paused) {
+                    lobbyMusic.play().catch(err => {});
+                }
+            }
         }
         function updateMediaButtons() { micOnIcon.classList.toggle('hidden',!isMicOn);micOffIcon.classList.toggle('hidden',isMicOn);toggleMicBtn.classList.toggle('bg-green-600',isMicOn);toggleMicBtn.classList.toggle('bg-red-600',!isMicOn);camOnIcon.classList.toggle('hidden',!isCamOn);camOffIcon.classList.toggle('hidden',isCamOn);toggleCamBtn.classList.toggle('bg-green-600',isCamOn);toggleCamBtn.classList.toggle('bg-red-600',!isCamOn); }
         toggleMicBtn.addEventListener('click', () => { isMicOn=!isMicOn; if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);updateMediaButtons(); });
