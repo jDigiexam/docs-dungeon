@@ -704,7 +704,8 @@
                             statusText.textContent = 'Status: MONSTER';
                             requestAnimationFrame(gameLoop);
                         }
-                        checkWinConditions();
+                        if (gameState.players[myPlayerId]?.isHost) {
+            checkWinConditions();
                     }
                 })
                 .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
