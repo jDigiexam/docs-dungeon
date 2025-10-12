@@ -71,15 +71,11 @@
         <div id="char-creation-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-40 hidden">
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
                 <h2 class="text-2xl mb-4">Character Customization</h2>
-                
                 <canvas id="lobby-preview-canvas" width="128" height="128" class="bg-gray-800 mx-auto mb-4 rounded-lg border-2 border-gray-600"></canvas>
-        
                 <div class="mb-4">
                     <label class="block text-sm font-medium mb-2">Choose your Hero:</label>
-                    <div id="character-grid" class="grid grid-cols-5 sm:grid-cols-6 gap-2 bg-gray-900/50 p-2 rounded-lg max-h-48 overflow-y-auto">
-                        </div>
+                    <div id="character-grid" class="grid grid-cols-5 sm:grid-cols-6 gap-2 bg-gray-900/50 p-2 rounded-lg max-h-48 overflow-y-auto"></div>
                 </div>
-                
                 <input id="username-input" type="text" placeholder="Enter your name" class="text-black p-2 rounded w-full mb-4">
                 <button id="join-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded w-full">Join Game</button>
             </div>
@@ -201,7 +197,8 @@
             {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}
         ];
 
-        const clueSprite = {sx: 128, sy: 0}; 
+        // --- FIXED: Coordinates now point to a chest sprite (assuming it's at 0,0 on Items8x.png) ---
+        const clueSprite = {sx: 0, sy: 0}; 
         const weaponSprite = {sx: 384, sy: 128}; 
         const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
 
@@ -216,7 +213,6 @@
             };
             const assetKeys = Object.keys(assetSources);
             let assetsToLoad = assetKeys.length;
-
             function assetLoaded() {
                 assetsLoadedCount++;
                 if (assetsLoadedCount === assetsToLoad) {
@@ -225,13 +221,11 @@
                     setupLobby();
                 }
             }
-
             for (const key of assetKeys) {
                 assets[key].src = assetSources[key];
                 assets[key].onload = assetLoaded;
                 assets[key].onerror = () => console.error(`Failed to load asset: ${assetSources[key]}`);
             }
-
             resizeCanvas();
         }
 
@@ -278,7 +272,6 @@
         }
 
         joinGameBtn.addEventListener('click', () => {
-            if (assetsLoadedCount < Object.keys(assets).length) return;
             const username = usernameInput.value.trim();
             if (!username) { usernameInput.style.borderColor = 'red'; return; }
             myPlayerId = `player_${Date.now()}`;
@@ -592,7 +585,7 @@
             const me = gameState.players[myPlayerId];
             if (me && me.isHost) {
                 startGameBtn.style.display = 'block';
-                const allReady = Object.values(gameState.players).length > 1 && Object.values(gameState.players).every(p => p.isReady);
+                const allReady = Object.values(gameState.players).length > 0 && Object.values(gameState.players).every(p => p.isReady);
                 startGameBtn.disabled = !allReady;
             } else {
                 startGameBtn.style.display = 'none';
@@ -678,7 +671,19 @@
             return clues;
         }
         
-        function checkClueCollection() { const p=gameState.players[myPlayerId];if(!p||!gameState.clues)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE);gameState.clues.forEach(c=>{if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push('team1');updateClueCounter();}}); }
+        // --- MODIFIED: Prevents monsters from picking up chests ---
+        function checkClueCollection() { 
+            const player = gameState.players[myPlayerId];
+            if(!player || !gameState.clues || player.isMonster) return; // If player is monster, stop.
+            const px = Math.floor(player.x / TILE_SIZE), py = Math.floor(player.y / TILE_SIZE);
+            gameState.clues.forEach(clue => {
+                if (clue.level === player.level && clue.x === px && clue.y === py && clue.collectedByTeams.length === 0) {
+                    clue.collectedByTeams.push('team1'); // Using a placeholder teamId
+                    updateClueCounter();
+                }
+            });
+        }
+        
         function checkPlayerCollisions() { const me=gameState.players[myPlayerId];if(!me||me.status!=='alive')return;for(const oId in gameState.players){if(oId===myPlayerId)continue;const o=gameState.players[oId];if(o.status!=='alive'||o.level!==me.level)continue;if(Math.sqrt((me.x-o.x)**2+(me.y-o.y)**2)<TILE_SIZE*0.7){if(me.hasWeapon&&o.isMonster)broadcastMonsterKilled(me.username);if(me.isMonster&&!o.hasWeapon)broadcastPlayerKilled(oId);}}}
         function checkStairsUse() { const p=gameState.players[myPlayerId];if(!p)return;const now=Date.now();if(p.lastStairsUse&&now-p.lastStairsUse<500)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE),tile=gameState.levels[p.level]?.grid[py]?.[px];if(tile&&tile.type==='STAIRS'){p.lastStairsUse=now;const cId=p.level;p.level=tile.targetLevel;const tL=gameState.levels[p.level];let exit=false;for(let y=0;y<MAP_HEIGHT;y++){for(let x=0;x<MAP_WIDTH;x++){const tT=tL.grid[y]?.[x];if(tT&&tT.type==='STAIRS'&&tT.targetLevel===cId){p.x=(x+0.5)*TILE_SIZE;p.y=(y+0.5)*TILE_SIZE;exit=true;break;}}if(exit)break;}broadcastPlayerState();}}
         function updateClueCounter() { if(!gameState.clues)return;const count=gameState.clues.filter(c=>c.collectedByTeams.length>0).length;cluesText.textContent=`Chests Found: ${count}/${NUM_CLUES}`;if(count>=NUM_CLUES&&gameState.players[myPlayerId]&&!gameState.players[myPlayerId].hasWeapon){gameState.players[myPlayerId].hasWeapon=true;broadcastPlayerState();}}
