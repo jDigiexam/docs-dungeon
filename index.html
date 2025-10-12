@@ -176,10 +176,10 @@
         // Game Constants
         const TILE_SIZE = 128;
         const SPRITE_SIZE = 128;
-        const MAP_WIDTH = 100; 
-        const MAP_HEIGHT = 80;
+        const MAP_WIDTH = 60; 
+        const MAP_HEIGHT = 50;
         const NUM_CLUES = 7;
-        const MIN_CLUE_DISTANCE = 10;
+        const MIN_CLUE_DISTANCE = 5;
         const PLAYER_SPEED = 10; 
         const MONSTER_SPEED = 11;
         const SIGHT_RADIUS = 8;
@@ -336,10 +336,11 @@
             gameScreen.style.display = 'block';
             gameStatusPanel.style.display = 'block';
             
-            // Assign roles and generate level data for all players consistently
             const presences = Object.keys(gameChannel.presenceState()).sort();
-            const monsterId = presences[1] ? gameState.players[presenceState[presences[1]][0].id]?.id : null;
+            const monsterId = presences.length > 1 ? gameChannel.presenceState()[presences[1]][0].id : null;
             const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
+            
+            gameState.levels = generateLevels();
 
             Object.values(gameState.players).forEach(p => {
                 const startRoom = gameState.levels.A.rooms[Math.floor(Math.random() * gameState.levels.A.rooms.length)];
@@ -356,6 +357,7 @@
             
             gameLoop();
         }
+
 
         function gameLoop() {
             if (gameState.gamePhase !== 'playing' || gameState.players[myPlayerId]?.status !== 'alive') {
@@ -569,12 +571,12 @@
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
                     if (payload.id && gameState.players[payload.id]) {
                         Object.assign(gameState.players[payload.id], payload);
-                    } else {
+                    } else if (payload.id) {
                         gameState.players[payload.id] = payload;
                     }
                     if(gameState.gamePhase === 'lobby') {
-                        updatePlayerListUI();
                         checkHostAndReadyStatus();
+                        updatePlayerListUI();
                     }
                  })
                 .on('broadcast', { event: 'start_game' }, () => startGame())
@@ -625,42 +627,46 @@
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
-                    // Clear local players that are no longer in presence
+                    const currentPlayersInPresence = {};
+                    Object.values(presenceState).forEach(pArr => {
+                        const p = pArr[0];
+                        currentPlayersInPresence[p.id] = p;
+                    });
+                    
                     for (const id in gameState.players) {
-                        if (!Object.values(presenceState).some(pArr => pArr[0].id === id)) {
+                        if (!currentPlayersInPresence[id]) {
                             delete gameState.players[id];
                         }
                     }
-                    // Add/update players from presence
-                    Object.values(presenceState).forEach(presenceArr => {
-                        const p = presenceArr[0];
-                        if(!gameState.players[p.id]) {
-                            gameState.players[p.id] = p;
+                     for (const id in currentPlayersInPresence) {
+                        if (!gameState.players[id]) {
+                            gameState.players[id] = currentPlayersInPresence[id];
                         }
-                    });
+                    }
                     
-                    updatePlayerListUI();
                     checkHostAndReadyStatus();
+                    updatePlayerListUI();
 
                     for (const id in presenceState) {
                         if (id !== myPlayerId) {
                             const pres = presenceState[id][0];
-                             if (!peerConnections[pres.player_id]) createPeerConnection(pres.player_id, true);
+                             if (!peerConnections[pres.id]) createPeerConnection(pres.id, true);
                         }
                     }
                 })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
                     leftPresences.forEach(p => {
-                        delete gameState.players[p.id];
-                        if (peerConnections[p.id]) {
-                            peerConnections[p.id].close();
-                            delete peerConnections[p.id];
+                        const playerId = p.id;
+                        delete gameState.players[playerId];
+                        if (peerConnections[playerId]) {
+                            peerConnections[playerId].close();
+                            delete peerConnections[playerId];
                         }
-                        const videoElement = document.getElementById(`video-${p.id}`);
+                        const videoElement = document.getElementById(`video-${playerId}`);
                         if (videoElement) videoElement.remove();
                     });
-                    updatePlayerListUI();
                     checkHostAndReadyStatus();
+                    updatePlayerListUI();
                 })
                 .subscribe(async (status) => {
                     if (status === 'SUBSCRIBED') {
