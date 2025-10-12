@@ -201,16 +201,16 @@
             STAIRS: [4, 1],
         };
 
-        const sprites = {
-            red_wizard: {sx: 0, sy: 0},
-            blue_wizard: {sx: 2*SPRITE_SIZE, sy: 0},
-            green_wizard: {sx: 1*SPRITE_SIZE, sy: 2*SPRITE_SIZE},
-            yellow_wizard: {sx: 3*SPRITE_SIZE, sy: 2*SPRITE_SIZE},
-            dark_knight: {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-            silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-            rogue: {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-            ranger: {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
-        };
+const sprites = {
+    red_wizard:    {sx: 0, sy: 0},
+    blue_wizard:   {sx: 2*SPRITE_SIZE, sy: 0},
+    green_wizard:  {sx: 3*SPRITE_SIZE, sy: 0}, // FIXED
+    yellow_wizard: {sx: 3*SPRITE_SIZE, sy: 2*SPRITE_SIZE},
+    dark_knight:   {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+    silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+    rogue:         {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
+    ranger:        {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
+};
         const monsterSprites = [ 
             {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, 
             {sx: 3*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 1*SPRITE_SIZE, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE, sheet: 'monsters'},
