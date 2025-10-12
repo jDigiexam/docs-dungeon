@@ -9,7 +9,6 @@
     <style>
         body { font-family: 'Courier New', Courier, monospace; }
         #game-canvas, #lobby-preview-canvas { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
-        /* Simple focus styles for accessibility and clarity */
         input:focus, button:focus, select:focus { outline: 2px solid #4f46e5; outline-offset: 2px; }
     </style>
 </head>
@@ -96,7 +95,7 @@
         <div id="ready-room-screen" class="absolute inset-0 bg-gray-800 flex flex-col items-center justify-center z-30 hidden p-8">
             <h2 class="text-3xl mb-6">Game Lobby</h2>
             <div id="player-list" class="w-full max-w-lg bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
-                </div>
+            </div>
             <div class="flex space-x-4">
                 <button id="ready-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded text-xl">Ready Up</button>
                 <button id="start-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden disabled:opacity-50" disabled>Start Game</button>
@@ -291,28 +290,49 @@
             joinLobby(username);
         });
 
-readyBtn.addEventListener('click', () => {
-    const me = gameState.players[myPlayerId];
-    if (me) {
-        me.isReady = !me.isReady;
-        readyBtn.textContent = me.isReady ? 'Unready' : 'Ready Up';
-        readyBtn.classList.toggle('bg-yellow-500', me.isReady);
-        readyBtn.classList.toggle('hover:bg-yellow-400', me.isReady);
-        readyBtn.classList.toggle('bg-green-600', !me.isReady);
-        readyBtn.classList.toggle('hover:bg-green-500', !me.isReady);
+        readyBtn.addEventListener('click', () => {
+            const me = gameState.players[myPlayerId];
+            if (me) {
+                me.isReady = !me.isReady;
+                readyBtn.textContent = me.isReady ? 'Unready' : 'Ready Up';
+                readyBtn.classList.toggle('bg-yellow-500', me.isReady);
+                readyBtn.classList.toggle('hover:bg-yellow-400', me.isReady);
+                readyBtn.classList.toggle('bg-green-600', !me.isReady);
+                readyBtn.classList.toggle('hover:bg-green-500', !me.isReady);
 
-        // Tell other players about your new status
-        broadcastPlayerState();
-
-        // ADD THIS LINE: Immediately check the lobby status after your own action
-        checkHostAndReadyStatus();
-    }
-});
+                broadcastPlayerState();
+                checkHostAndReadyStatus();
+            }
+        });
 
         startGameBtn.addEventListener('click', () => {
-            if (gameChannel) {
-                gameChannel.send({ type: 'broadcast', event: 'start_game', payload: {} });
-            }
+            if (!gameChannel || !gameState.players[myPlayerId]?.isHost) return;
+
+            const playerIds = Object.values(gameState.players).map(p => p.id);
+            playerIds.sort(() => Math.random() - 0.5);
+            const monsterId = playerIds.length > 0 ? playerIds[0] : null;
+            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
+            const levels = generateLevels();
+            const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
+
+            Object.values(gameState.players).forEach(p => {
+                const startRoom = levels.A.rooms[Math.floor(Math.random() * levels.A.rooms.length)];
+                p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+                p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+                p.level = 'A';
+                p.status = 'alive';
+                p.direction = 'right';
+                p.isMonster = p.id === monsterId;
+                if (p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
+            });
+
+            const initialState = {
+                players: gameState.players,
+                levels: levels,
+                clues: clues
+            };
+            
+            gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
         });
 
         // --- 2. GAME LOGIC ---
@@ -333,42 +353,27 @@ readyBtn.addEventListener('click', () => {
             await setupSupabaseChannels();
         }
 
-        function startGame() {
+        // --- FIXED: This is now the ONLY startGame function ---
+        function startGame(initialState) {
+            if (!initialState) {
+                console.error("Game cannot start without initial state!");
+                return;
+            }
+
             gameState.gamePhase = 'playing';
+            gameState.players = initialState.players;
+            gameState.levels = initialState.levels;
+            gameState.clues = initialState.clues;
+
             readyRoomScreen.style.display = 'none';
             gameScreen.style.display = 'block';
             gameStatusPanel.style.display = 'block';
-            
-            // --- FIXED: Truly random monster selection ---
-            const playerIds = Object.values(gameChannel.presenceState()).map(p => p[0].id);
-            // Simple Fisher-Yates shuffle
-            for (let i = playerIds.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
-            }
-            const monsterId = playerIds.length > 0 ? playerIds[0] : null; // Pick the first player from the shuffled list
-            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
-            
-            gameState.levels = generateLevels();
-
-            Object.values(gameState.players).forEach(p => {
-                const startRoom = gameState.levels.A.rooms[Math.floor(Math.random() * gameState.levels.A.rooms.length)];
-                p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
-                p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
-                p.level = 'A';
-                p.status = 'alive';
-                p.direction = 'right';
-                p.isMonster = p.id === monsterId;
-                if(p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
-            });
-
-            gameState.clues = placeClues(gameState.levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
             
             gameLoop();
         }
 
         function gameLoop() {
-            if (gameState.gamePhase !== 'playing' || gameState.players[myPlayerId]?.status !== 'alive') {
+            if (gameState.gamePhase !== 'playing' || !gameState.players[myPlayerId] || gameState.players[myPlayerId].status !== 'alive') {
                 return;
             }
             updateMyPlayerPosition();
@@ -380,11 +385,10 @@ readyBtn.addEventListener('click', () => {
             requestAnimationFrame(gameLoop);
         }
 
-        // --- 3. DRAWING & RENDERING (No changes in this section) ---
+        // --- 3. DRAWING & RENDERING ---
         function drawGame() {
-            if (!ctx || !myPlayerId || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
+            if (!ctx || !myPlayerId || !gameState.players[myPlayerId] || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
             const myPlayer = gameState.players[myPlayerId];
-            if (!myPlayer) return;
             
             ctx.save();
             ctx.imageSmoothingEnabled = false; 
@@ -404,7 +408,6 @@ readyBtn.addEventListener('click', () => {
 
             drawLevel(myPlayer.level, cameraX, cameraY);
             drawClues(myPlayer.level);
-            // drawWeapon is empty and not needed
             
             Object.values(gameState.players).forEach(player => {
                 if (player.level === myPlayer.level) {
@@ -482,7 +485,8 @@ readyBtn.addEventListener('click', () => {
 
             for (let y = startY; y < endY; y++) {
                 for (let x = startX; x < endX; x++) {
-                    const tile = level.grid[y][x];
+                    const tile = level.grid[y]?.[x];
+                    if (!tile) continue;
                     const xPos = x * TILE_SIZE;
                     const yPos = y * TILE_SIZE;
                     
@@ -510,11 +514,8 @@ readyBtn.addEventListener('click', () => {
         }
 
         function drawClues(levelId) {
-            const myTeamId = gameState.players[myPlayerId]?.teamId;
-            if (myTeamId === undefined) return; // Simplified check for teams when not implemented
-
+            if (!gameState.clues) return;
             gameState.clues.forEach(clue => {
-                // Simplified logic assuming single-player or no teams for now
                 if (clue.level === levelId && clue.collectedByTeams.length === 0) { 
                     ctx.drawImage(assets.scenery, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
@@ -535,7 +536,8 @@ readyBtn.addEventListener('click', () => {
 
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 for (let x = 0; x < MAP_WIDTH; x++) {
-                    const tile = level.grid[y][x];
+                    const tile = level.grid[y]?.[x];
+                    if(!tile) continue;
                     if (tile.type.startsWith('WALL')) {
                         minimapCtx.fillStyle = '#6b7280';
                         minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth), Math.ceil(tileHeight));
@@ -548,8 +550,8 @@ readyBtn.addEventListener('click', () => {
             
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 for (let x = 0; x < MAP_WIDTH; x++) {
-                     const tile = level.grid[y][x];
-                     if (tile.type === 'STAIRS') {
+                     const tile = level.grid[y]?.[x];
+                     if(tile && tile.type === 'STAIRS') {
                          minimapCtx.fillStyle = '#a78bfa';
                          minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth * 2.5), Math.ceil(tileHeight * 2.5));
                     }
@@ -566,7 +568,7 @@ readyBtn.addEventListener('click', () => {
         }
 
         function updatePlayerListUI() {
-            if (gameState.gamePhase !== 'lobby') return;
+            if (gameState.gamePhase !== 'lobby' || !playerList) return;
             playerList.innerHTML = '';
             Object.values(gameState.players).forEach(player => {
                 const playerEl = document.createElement('div');
@@ -591,123 +593,124 @@ readyBtn.addEventListener('click', () => {
             });
         }
 
-// --- 4. SUPABASE REALTIME ---
-async function setupSupabaseChannels() {
-    const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
-    gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
+        // --- 4. SUPABASE REALTIME ---
+        async function setupSupabaseChannels() {
+            const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
+            gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
 
-    gameChannel
-        .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
-            if (payload.id && gameState.players[payload.id]) {
-                Object.assign(gameState.players[payload.id], payload);
-            } else if (payload.id) {
-                gameState.players[payload.id] = payload;
-            }
-            if(gameState.gamePhase === 'lobby') {
-                checkHostAndReadyStatus();
-            }
-         })
-        .on('broadcast', { event: 'start_game' }, () => startGame())
-        // ... (keep other broadcast handlers like player_killed, etc.)
-        .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
-        .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
-        
-        .on('presence', { event: 'sync' }, () => {
+            gameChannel
+                .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
+                    if (gameState.players[payload.id]) {
+                        gameState.players[payload.id].isReady = payload.isReady;
+                    }
+                    if(gameState.gamePhase === 'lobby') {
+                        checkHostAndReadyStatus();
+                    }
+                 })
+                .on('broadcast', { event: 'init_game_state' }, ({ payload }) => {
+                    startGame(payload);
+                })
+                .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
+                    if (gameState.players[payload.playerId]) {
+                        gameState.players[payload.playerId].status = 'dead';
+                        if (payload.playerId === myPlayerId) {
+                            statusText.textContent = 'Status: Dead';
+                            gameOverText.textContent = 'You Have Died';
+                            gameOverSubtext.textContent = 'The monster got you...';
+                            gameOverScreen.style.display = 'flex';
+                        }
+                    }
+                })
+                .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
+                    gameOverText.textContent = 'Hunters Win!';
+                    gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
+                    gameOverScreen.style.display = 'flex';
+                    if (gameChannel) gameChannel.unsubscribe();
+                })
+                .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
+                .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
+                
+                .on('presence', { event: 'sync' }, () => {
+                    const presenceState = gameChannel.presenceState();
+                    const newPlayers = {};
+
+                    for (const id in presenceState) {
+                        const presenceInfo = presenceState[id][0];
+                        newPlayers[presenceInfo.id] = {
+                            ...(gameState.players[presenceInfo.id] || {}),
+                            ...presenceInfo
+                        };
+                    }
+
+                    if (gameState.players[myPlayerId]) {
+                        newPlayers[myPlayerId] = gameState.players[myPlayerId];
+                    }
+                    
+                    gameState.players = newPlayers;
+
+                    checkHostAndReadyStatus();
+
+                    for (const id in presenceState) {
+                        const pres = presenceState[id][0];
+                        if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
+                            createPeerConnection(pres.id, true);
+                        }
+                    }
+                })
+                .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+                    leftPresences.forEach(p => {
+                        const playerId = p.id;
+                        if (peerConnections[playerId]) {
+                            peerConnections[playerId].close();
+                            delete peerConnections[playerId];
+                        }
+                        const videoContainer = document.getElementById(`video-container-${playerId}`);
+                        if (videoContainer) videoContainer.remove();
+                    });
+                })
+                .subscribe(async (status) => {
+                    if (status === 'SUBSCRIBED') {
+                        await gameChannel.track(gameState.players[myPlayerId]);
+                    }
+                });
+        }
+
+        function checkHostAndReadyStatus() {
+            if (!gameChannel) return;
+
             const presenceState = gameChannel.presenceState();
-            const newPlayers = {};
+            const presences = Object.keys(presenceState).sort();
 
-            // Rebuild the player list from the definitive presence state.
-            for (const id in presenceState) {
-                const presenceInfo = presenceState[id][0];
-                newPlayers[presenceInfo.id] = {
-                    ...(gameState.players[presenceInfo.id] || {}), // Keep existing data like isReady
-                    ...presenceInfo // Overwrite with the latest from presence
-                };
+            Object.values(gameState.players).forEach(p => p.isHost = false);
+
+            if (presences.length > 0) {
+                const newHostId = presenceState[presences[0]]?.[0]?.id;
+                
+                if (newHostId && gameState.players[newHostId]) {
+                    gameState.players[newHostId].isHost = true;
+                }
             }
 
-            // Ensure our own client's data is never overwritten by a stale version from the server.
-            if (gameState.players[myPlayerId]) {
-                newPlayers[myPlayerId] = gameState.players[myPlayerId];
+            const me = gameState.players[myPlayerId];
+            if (me && me.isHost) {
+                startGameBtn.style.display = 'block';
+                const allReady = Object.values(gameState.players).length > 1 && Object.values(gameState.players).every(p => p.isReady);
+                startGameBtn.disabled = !allReady;
+            } else {
+                startGameBtn.style.display = 'none';
             }
             
-            gameState.players = newPlayers; // Atomically update the player list
-
-            // This is the correct place to check for a new host and update the UI
-            checkHostAndReadyStatus();
-
-            // Connect to new peers
-            for (const id in presenceState) {
-                const pres = presenceState[id][0];
-                if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
-                    createPeerConnection(pres.id, true);
-                }
-            }
-        })
-        
-        // --- FIXED: Simplified 'leave' handler ---
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-            // The 'leave' event's only job is to clean up resources for the leaving player.
-            // The 'sync' event will handle updating the game state and re-assigning the host.
-            leftPresences.forEach(p => {
-                const playerId = p.id;
-                if (peerConnections[playerId]) {
-                    peerConnections[playerId].close();
-                    delete peerConnections[playerId];
-                }
-                const videoContainer = document.getElementById(`video-container-${playerId}`);
-                if (videoContainer) videoContainer.remove();
-            });
-        })
-
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await gameChannel.track(gameState.players[myPlayerId]);
-            }
-        });
-}
-
-// --- FIXED: More robust checkHostAndReadyStatus function ---
-function checkHostAndReadyStatus() {
-    if (!gameChannel) return;
-
-    const presenceState = gameChannel.presenceState();
-    const presences = Object.keys(presenceState).sort();
-
-    // First, clear the host status from all players locally
-    Object.values(gameState.players).forEach(p => p.isHost = false);
-
-    // Then, assign the host status to the first player in the sorted presence list
-    if (presences.length > 0) {
-        // Safely get the new host's ID
-        const newHostId = presenceState[presences[0]]?.[0]?.id;
-        
-        if (newHostId && gameState.players[newHostId]) {
-            gameState.players[newHostId].isHost = true;
+            updatePlayerListUI();
         }
-    }
-
-    const me = gameState.players[myPlayerId];
-    if (me && me.isHost) {
-        startGameBtn.style.display = 'block';
-        // Only enable the start button if there's more than one player and everyone is ready
-        const allReady = Object.values(gameState.players).length > 1 && Object.values(gameState.players).every(p => p.isReady);
-        startGameBtn.disabled = !allReady;
-    } else {
-        startGameBtn.style.display = 'none';
-    }
-    
-    updatePlayerListUI();
-}
         
-        function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
+        function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: { id: myPlayerId, ...gameState.players[myPlayerId] } }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
 
-        // --- 5. PLAYER MOVEMENT & CONTROLS (No changes in this section) ---
+        // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
         let joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0, radius: 0 };
         
-        // Defer joystick setup until after DOM is loaded and sized
         setTimeout(() => {
             const joystickContainer = document.getElementById('joystick-container');
             if (joystickContainer) {
@@ -742,7 +745,7 @@ function checkHostAndReadyStatus() {
             const gridY2 = Math.floor((y + playerSize) / TILE_SIZE);
 
             const check = (gx, gy) => {
-                if (gy < 0 || gy >= MAP_HEIGHT || gx < 0 || gx >= MAP_WIDTH) return true; // Bounds check
+                if (gy < 0 || gy >= MAP_HEIGHT || gx < 0 || gx >= MAP_WIDTH) return true;
                 const tile = levelGrid[gy]?.[gx];
                 return !tile || (tile.type !== 'FLOOR' && tile.type !== 'STAIRS');
             }
@@ -778,10 +781,10 @@ function checkHostAndReadyStatus() {
                     moved = true;
                 }
 
-                newX = player.x; // Use updated X for Y collision check
+                newX = player.x;
                 newY = player.y + moveY;
 
-                if (!isColliding(newX, newY, currentLevel.grid)) {
+                if (!isColliding(player.x, newY, currentLevel.grid)) {
                     player.y = newY;
                     moved = true;
                 }
@@ -790,7 +793,7 @@ function checkHostAndReadyStatus() {
             }
         }
         
-        // --- 6. GAME MECHANICS (No changes in this section) ---
+        // --- 6. GAME MECHANICS ---
         function generateLevels() {
             const levels = {};
             const levelNames = ['A', 'B', 'C'];
@@ -834,10 +837,9 @@ function checkHostAndReadyStatus() {
                 levels[levelId] = { grid, rooms };
             });
 
-            // Place paired stairs between levels
             for (let i = 0; i < levelNames.length; i++) {
                 const levelIdA = levelNames[i];
-                const levelIdB = levelNames[(i + 1) % levelNames.length]; // A->B, B->C, C->A
+                const levelIdB = levelNames[(i + 1) % levelNames.length];
                 
                 const roomA = levels[levelIdA].rooms[Math.floor(Math.random() * levels[levelIdA].rooms.length)];
                 const xA = roomA.x + 1 + Math.floor(Math.random() * (roomA.w - 2));
@@ -859,7 +861,7 @@ function checkHostAndReadyStatus() {
                 levels[levelId].rooms.forEach(room => {
                     for (let y = room.y + 1; y < room.y + room.h - 1; y++) {
                         for (let x = room.x + 1; x < room.x + room.w - 1; x++) {
-                            const isPlayerSpawn = (levelId === playerStartPos.level && x === Math.floor(playerStartPos.x / TILE_SIZE) && y === Math.floor(playerStartPos.y / TILE_SIZE));
+                            const isPlayerSpawn = (playerStartPos && levelId === playerStartPos.level && x === Math.floor(playerStartPos.x / TILE_SIZE) && y === Math.floor(playerStartPos.y / TILE_SIZE));
                             if (!isPlayerSpawn && levels[levelId].grid[y][x].type === 'FLOOR') {
                                 allPossibleLocations.push({ x, y, level: levelId });
                             }
@@ -883,14 +885,12 @@ function checkHostAndReadyStatus() {
         }
         
         function checkClueCollection() {
-            const player = gameState.players[myPlayerId]; if(!player) return;
+            const player = gameState.players[myPlayerId]; if(!player || !gameState.clues) return;
             const playerCellX = Math.floor(player.x / TILE_SIZE); const playerCellY = Math.floor(player.y / TILE_SIZE);
             gameState.clues.forEach(clue => { if (clue.level === player.level && clue.x === playerCellX && clue.y === playerCellY && clue.collectedByTeams.length === 0) { clue.collectedByTeams.push('team1'); updateClueCounter(); } });
         }
         
-        function checkWeaponCollection() {
-            // Simplified for now - weapon is auto-equipped after clues
-        }
+        function checkWeaponCollection() { /* Simplified */ }
         
         function checkPlayerCollisions() {
             const me = gameState.players[myPlayerId];
@@ -923,13 +923,12 @@ function checkHostAndReadyStatus() {
                 const currentLevelId = player.level;
                 player.level = tile.targetLevel;
                 
-                 // Find the corresponding stairs on the target level
                 const targetLevelData = gameState.levels[player.level];
                 let foundExit = false;
                 for (let y = 0; y < MAP_HEIGHT; y++) {
                     for (let x = 0; x < MAP_WIDTH; x++) {
-                        const targetTile = targetLevelData.grid[y][x];
-                        if (targetTile.type === 'STAIRS' && targetTile.targetLevel === currentLevelId) {
+                        const targetTile = targetLevelData.grid[y]?.[x];
+                        if (targetTile && targetTile.type === 'STAIRS' && targetTile.targetLevel === currentLevelId) {
                             player.x = (x + 0.5) * TILE_SIZE;
                             player.y = (y + 0.5) * TILE_SIZE;
                             foundExit = true; break;
@@ -942,23 +941,22 @@ function checkHostAndReadyStatus() {
         }
         
         function updateClueCounter() {
+            if (!gameState.clues) return;
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
             cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
-            if (collectedCount >= NUM_CLUES && !gameState.players[myPlayerId].hasWeapon) {
+            if (collectedCount >= NUM_CLUES && gameState.players[myPlayerId] && !gameState.players[myPlayerId].hasWeapon) {
                 const player = gameState.players[myPlayerId];
-                if (player) {
-                    player.hasWeapon = true;
-                    broadcastPlayerState(); // Inform others you have the weapon
-                }
+                player.hasWeapon = true;
+                broadcastPlayerState();
             }
         }
         
-        // --- 7. WEBRTC (VIDEO/AUDIO CHAT) & 8. CHAT (No changes in these sections) ---
+        // --- 7. WEBRTC & 8. CHAT ---
         async function startLocalMedia() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 localVideo.srcObject = localStream;
-                isMicOn = false; isCamOn = false; // Start muted
+                isMicOn = false; isCamOn = false;
                 localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
                 localStream.getVideoTracks().forEach(track => track.enabled = isCamOn);
                 updateMediaButtons();
@@ -985,7 +983,7 @@ function checkHostAndReadyStatus() {
             peerConnections[peerId].ontrack = event => {
                 let videoContainer = document.getElementById(`video-container-${peerId}`);
                 if (!videoContainer) {
-                    remoteVideosContainer.innerHTML = ''; // Only show one remote video for now
+                    remoteVideosContainer.innerHTML = '';
                     videoContainer = document.createElement('div');
                     videoContainer.id = `video-container-${peerId}`;
                     videoContainer.className = 'w-full h-full relative';
