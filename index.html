@@ -290,7 +290,7 @@
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
                 isMonster: false, hasWeapon: false, lastStairsUse: 0,
-                spriteStyle: spriteStyleSelect.value
+                spriteStyle: spriteStyleSelect.value, direction: 'right'
             };
 
             await setupSupabaseChannels();
@@ -379,6 +379,11 @@
             if (!spriteInfo || !spritesheet) return;
 
             ctx.save();
+            ctx.translate(Math.floor(player.x), Math.floor(player.y));
+            
+            if (player.direction === 'left') {
+                ctx.scale(-1, 1);
+            }
 
             if (player.status === 'dead') {
                 ctx.filter = 'grayscale(100%)';
@@ -387,7 +392,7 @@
             ctx.drawImage(
                 spritesheet,
                 spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE,
-                Math.floor(player.x - TILE_SIZE / 2), Math.floor(player.y - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE
+                -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE
             );
 
             ctx.restore();
@@ -466,23 +471,32 @@
                     const tile = level.grid[y][x];
                     if (tile.type.startsWith('WALL')) {
                         minimapCtx.fillStyle = '#6b7280';
-                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
-                    } else if (tile.type === 'FLOOR') {
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth), Math.ceil(tileHeight));
+                    } else if (tile.type === 'FLOOR' || tile.type === 'STAIRS') {
                         minimapCtx.fillStyle = '#1f2937';
-                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
-                    } else if (tile.type === 'STAIRS') {
-                        minimapCtx.fillStyle = '#8b5cf6';
-                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth), Math.ceil(tileHeight));
                     }
                 }
             }
+            
+            // Now draw stairs on top to make them more visible
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                     const tile = level.grid[y][x];
+                     if (tile.type === 'STAIRS') {
+                        minimapCtx.fillStyle = '#a78bfa'; // Lighter purple for stairs
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth * 2), Math.ceil(tileHeight * 2)); // Make them 2x2 tiles size for visibility
+                    }
+                }
+            }
+
 
             const playerMapX = (me.x / (MAP_WIDTH * TILE_SIZE)) * minimapCanvas.width;
             const playerMapY = (me.y / (MAP_HEIGHT * TILE_SIZE)) * minimapCanvas.height;
 
             minimapCtx.fillStyle = 'yellow';
             minimapCtx.beginPath();
-            minimapCtx.arc(playerMapX, playerMapY, 3, 0, Math.PI * 2);
+            minimapCtx.arc(playerMapX, playerMapY, 4, 0, Math.PI * 2); // Increased radius to 4
             minimapCtx.fill();
         }
 
@@ -625,7 +639,7 @@
 
             const check = (gx, gy) => {
                 const tile = levelGrid[gy]?.[gx];
-                return !tile || tile.type.startsWith('WALL');
+                return !tile || (tile.type !== 'FLOOR' && tile.type !== 'STAIRS');
             }
 
             return check(gridX1, gridY1) || check(gridX2, gridY1) ||
@@ -647,6 +661,12 @@
                 const moveX = (dx / mag) * moveSpeed;
                 const moveY = (dy / mag) * moveSpeed;
                 
+                if (moveX > 0) {
+                    player.direction = 'right';
+                } else if (moveX < 0) {
+                    player.direction = 'left';
+                }
+
                 let moved = false;
                 
                 let newX = player.x + moveX;
