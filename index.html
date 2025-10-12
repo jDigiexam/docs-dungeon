@@ -165,6 +165,7 @@
         const SIGHT_RADIUS = 6;
         const CAMERA_ZOOM = 0.5;
         const DEATH_TIMER_DURATION = 30000;
+        const MIN_SPAWN_DISTANCE = 15 * TILE_SIZE;
 
         // WebRTC State
         let localStream;
@@ -184,28 +185,21 @@
         };
 
         const sprites = {
-            red_wizard: {sx:0,sy:0,name:"Red Wizard"}, orange_wizard: {sx:128,sy:0,name:"Orange Wizard"}, blue_wizard: {sx:256,sy:0,name:"Blue Wizard"}, green_wizard: {sx:384,sy:0,name:"Green Wizard"},
-            dark_wizard: {sx:0,sy:128,name:"Dark Wizard"}, pink_wizard: {sx:128,sy:128,name:"Pink Wizard"}, grey_wizard: {sx:256,sy:128,name:"Grey Wizard"}, fire_wizard: {sx:384,sy:128,name:"Fire Wizard"},
-            lime_wizard: {sx:0,sy:256,name:"Lime Wizard"}, sky_wizard: {sx:128,sy:256,name:"Sky Wizard"}, white_wizard: {sx:256,sy:256,name:"White Wizard"}, yellow_wizard: {sx:384,sy:256,name:"Yellow Wizard"},
-            brown_wizard: {sx:0,sy:384,name:"Brown Wizard"}, dark_knight: {sx:128,sy:384,name:"Dark Knight"}, silver_knight: {sx:256,sy:384,name:"Silver Knight"}, horned_knight: {sx:384,sy:384,name:"Horned Knight"},
-            white_knight: {sx:0,sy:512,name:"White Knight"}, villager: {sx:128,sy:512,name:"Villager"}, ranger: {sx:256,sy:512,name:"Ranger"},
+            red_wizard:      {sx: 0, sy: 0, name: "Red Wizard"}, orange_wizard:   {sx: 128, sy: 0, name: "Orange Wizard"}, blue_wizard:     {sx: 256, sy: 0, name: "Blue Wizard"}, green_wizard:    {sx: 384, sy: 0, name: "Green Wizard"},
+            dark_wizard:     {sx: 0,   sy: 128, name: "Dark Wizard"}, pink_wizard:     {sx: 128, sy: 128, name: "Pink Wizard"}, grey_wizard:     {sx: 256, sy: 128, name: "Grey Wizard"}, fire_wizard:     {sx: 384, sy: 128, name: "Fire Wizard"},
+            lime_wizard:     {sx: 0,   sy: 256, name: "Lime Wizard"}, sky_wizard:      {sx: 128, sy: 256, name: "Sky Wizard"}, white_wizard:    {sx: 256, sy: 256, name: "White Wizard"}, yellow_wizard:   {sx: 384, sy: 256, name: "Yellow Wizard"},
+            brown_wizard:    {sx: 0,   sy: 384, name: "Brown Wizard"}, dark_knight:     {sx: 128, sy: 384, name: "Dark Knight"}, silver_knight:   {sx: 256, sy: 384, name: "Silver Knight"}, horned_knight:   {sx: 384, sy: 384, name: "Horned Knight"},
+            white_knight:    {sx: 0,   sy: 512, name: "White Knight"}, villager:        {sx: 128, sy: 512, name: "Villager"}, ranger:          {sx: 256, sy: 512, name: "Ranger"},
         };
         
-        // --- MODIFIED: Added more giants ---
         const giantSprites = [
-            {sx: 0,   sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
-            {sx: 256, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
-            {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
-            {sx: 0,   sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, // Assuming a 2nd row of giants
-            {sx: 256, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
-            {sx: 512, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
+            {sx: 0,   sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 256, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 512, sy: 0, sWidth: 256, sHeight: 256, sheet: 'giants'},
+            {sx: 0,   sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 256, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'}, {sx: 512, sy: 256, sWidth: 256, sHeight: 256, sheet: 'giants'},
         ];
 
         const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
-        
-        // --- MODIFIED: Updated tombstone and chest sprites ---
-        const tombstoneSprite = {sx: 128, sy: 768}; // 2nd column, 7th row down
-        const clueSprite = {sx: 128, sy: 0}; // Golden chest on Scenery8x.png
+        const tombstoneSprite = {sx: 128, sy: 768};
+        const clueSprite = {sx: 128, sy: 0};
         const weaponSprite = {sx: 384, sy: 128}; 
 
         // --- 1. INITIALIZATION ---
@@ -298,41 +292,68 @@
             }
         });
 
-startGameBtn.addEventListener('click', () => {
-    if (!gameChannel || !gameState.players[myPlayerId]?.isHost) return;
+        startGameBtn.addEventListener('click', () => {
+            if (!gameChannel || !gameState.players[myPlayerId]?.isHost) return;
+            const playerIds = Object.values(gameState.players).map(p => p.id);
+            playerIds.sort(() => Math.random() - 0.5);
+            const monsterId = playerIds.length > 0 ? playerIds[0] : null;
+            const monsterSpriteIndex = Math.floor(Math.random() * giantSprites.length);
+            const levels = generateLevels();
+            const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
+            const levelNames = Object.keys(levels);
+            const hunters = Object.values(gameState.players).filter(p => p.id !== monsterId);
+            const monster = gameState.players[monsterId];
 
-    const playerIds = Object.values(gameState.players).map(p => p.id);
-    playerIds.sort(() => Math.random() - 0.5);
-    const monsterId = playerIds.length > 0 ? playerIds[0] : null;
-    const monsterSpriteIndex = Math.floor(Math.random() * giantSprites.length);
-    
-    // First, generate the levels
-    const levels = generateLevels(); 
-    
-    // Then, place clues on those levels
-    const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
+            hunters.forEach(hunter => {
+                const randomLevelName = levelNames[Math.floor(Math.random() * levelNames.length)];
+                const randomLevel = levels[randomLevelName];
+                const startRoom = randomLevel.rooms[Math.floor(Math.random() * randomLevel.rooms.length)];
+                hunter.level = randomLevelName;
+                hunter.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+                hunter.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+                hunter.status = 'alive';
+                hunter.direction = 'right';
+                hunter.isMonster = false;
+            });
 
-    // Now that 'levels' exists, position the players
-    Object.values(gameState.players).forEach(p => {
-        // This line will no longer cause an error
-        const startRoom = levels.A.rooms[Math.floor(Math.random() * levels.A.rooms.length)];
-        p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
-        p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
-        p.level = 'A';
-        p.status = 'alive';
-        p.direction = 'right';
-        p.isMonster = p.id === monsterId;
-        if (p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
-    });
+            if (monster) {
+                let monsterSpawnFound = false;
+                for (let i = 0; i < 50; i++) {
+                    const randomLevelName = levelNames[Math.floor(Math.random() * levelNames.length)];
+                    const randomLevel = levels[randomLevelName];
+                    const startRoom = randomLevel.rooms[Math.floor(Math.random() * randomLevel.rooms.length)];
+                    const monsterX = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+                    const monsterY = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+                    const isSafe = hunters.every(h => {
+                        if (h.level !== randomLevelName) return true;
+                        const distance = Math.sqrt((h.x - monsterX)**2 + (h.y - monsterY)**2);
+                        return distance > MIN_SPAWN_DISTANCE;
+                    });
+                    if (isSafe) {
+                        monster.level = randomLevelName;
+                        monster.x = monsterX;
+                        monster.y = monsterY;
+                        monsterSpawnFound = true;
+                        break;
+                    }
+                }
+                if (!monsterSpawnFound) {
+                    const randomLevelName = levelNames[Math.floor(Math.random() * levelNames.length)];
+                    const randomLevel = levels[randomLevelName];
+                    const startRoom = randomLevel.rooms[Math.floor(Math.random() * randomLevel.rooms.length)];
+                    monster.level = randomLevelName;
+                    monster.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+                    monster.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+                }
+                monster.status = 'alive';
+                monster.direction = 'right';
+                monster.isMonster = true;
+                monster.monsterSpriteIndex = monsterSpriteIndex;
+            }
 
-    const initialState = {
-        players: gameState.players,
-        levels: levels,
-        clues: clues
-    };
-    
-    gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
-});
+            const initialState = { players: gameState.players, levels: levels, clues: clues };
+            gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
+        });
 
         // --- 2. GAME LOGIC ---
         async function joinLobby(username) {
@@ -355,7 +376,7 @@ startGameBtn.addEventListener('click', () => {
             gameScreen.style.display = 'block';
             gameStatusPanel.style.display = 'block';
             initJoystick();
-            requestAnimationFrame(gameLoop); // Start the main loop
+            requestAnimationFrame(gameLoop);
         }
 
         function initJoystick() {
@@ -458,7 +479,6 @@ startGameBtn.addEventListener('click', () => {
         
         function drawPlayer(player) {
             let spriteInfo, spritesheet, sWidth, sHeight, dWidth, dHeight;
-
             if (player.isMonster) {
                 const monster = giantSprites[player.monsterSpriteIndex];
                 spriteInfo = {sx: monster.sx, sy: monster.sy};
@@ -476,13 +496,10 @@ startGameBtn.addEventListener('click', () => {
                  dHeight = TILE_SIZE;
             }
             if (!spriteInfo || !spritesheet) { console.warn("Could not find sprite for style:", player.spriteStyle); return; };
-
             ctx.save();
             ctx.translate(Math.floor(player.x), Math.floor(player.y));
             if (player.direction === 'left') { ctx.scale(-1, 1); }
-            
             ctx.drawImage(spritesheet, spriteInfo.sx, spriteInfo.sy, sWidth, sHeight, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
-
             if (player.hasWeapon) {
                  ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, dWidth / 4, -dHeight / 4, TILE_SIZE, TILE_SIZE);
             }
@@ -519,7 +536,7 @@ startGameBtn.addEventListener('click', () => {
             if (!gameState.clues) return;
             gameState.clues.forEach(clue => {
                 if (clue.level === levelId && clue.collectedByTeams.length === 0) { 
-                    ctx.drawImage(assets.items, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.drawImage(assets.scenery, clueSprite.sx, clueSprite.sy, SPRITE_SIZE, SPRITE_SIZE, clue.x * TILE_SIZE, clue.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
             });
         }
@@ -602,7 +619,7 @@ startGameBtn.addEventListener('click', () => {
                         resurrectedPlayer.deathTimestamp = null;
                         if (payload.playerId === myPlayerId) {
                             statusText.textContent = 'Status: Alive';
-                            gameLoop(); 
+                            gameLoop(performance.now()); 
                         }
                     }
                 })
@@ -615,7 +632,7 @@ startGameBtn.addEventListener('click', () => {
                         player.deathTimestamp = null;
                         if (payload.playerId === myPlayerId) {
                             statusText.textContent = 'Status: MONSTER';
-                            gameLoop();
+                            gameLoop(performance.now());
                         }
                     }
                 })
@@ -663,7 +680,7 @@ startGameBtn.addEventListener('click', () => {
             const me = gameState.players[myPlayerId];
             if (me && me.isHost) {
                 startGameBtn.style.display = 'block';
-                const allReady = Object.values(gameState.players).length > 1 && Object.values(gameState.players).every(p => p.isReady);
+                const allReady = Object.values(gameState.players).length > 0 && Object.values(gameState.players).every(p => p.isReady);
                 startGameBtn.disabled = !allReady;
             } else {
                 startGameBtn.style.display = 'none';
@@ -676,7 +693,6 @@ startGameBtn.addEventListener('click', () => {
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
         function broadcastPlayerResurrected(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_resurrected', payload: { playerId } }); }
         function broadcastForceTurnMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'force_turn_monster', payload: { playerId, monsterSpriteIndex } }); }
-
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -696,19 +712,16 @@ startGameBtn.addEventListener('click', () => {
             return check(gx1, gy1) || check(gx2, gy1) || check(gx1, gy2) || check(gx2, gy2);
         }
 
-        function updateMyPlayerPosition(deltaTime) { // Accept deltaTime
+        function updateMyPlayerPosition(deltaTime) {
             const player = gameState.players[myPlayerId];
             if (!player || player.status !== 'alive') return;
             const currentLevel = gameState.levels[player.level];
             if (!currentLevel) return;
-    
             let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
             let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
             const mag = Math.sqrt(dx**2 + dy**2);
-
             if (mag > 0) {
-            const speed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
-                // Multiply by deltaTime to get frame-independent speed
+                const speed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
                 const moveX = (dx / mag) * speed * deltaTime;
                 const moveY = (dy / mag) * speed * deltaTime;
                 if (Math.abs(moveX) > 0.1) player.direction = moveX > 0 ? 'right' : 'left';
@@ -726,11 +739,34 @@ startGameBtn.addEventListener('click', () => {
         
         // --- 6. GAME MECHANICS ---
         function generateLevels() {
-            // ... (This function is long and unchanged from the last version, so it's kept the same)
+            const levels = {}, levelNames = ['A', 'B', 'C'];
+            const levelData = {
+                A: { rooms: [ {x:5, y:5, w:10, h:8}, {x:20, y:8, w:10, h:10}, {x:40, y:5, w:15, h:10}, {x:45, y:20, w:10, h:10}, {x:5, y:25, w:15, h:15}, {x:30, y:35, w:15, h:10}, {x:25, y:20, w:10, h:10} ] },
+                B: { rooms: [ {x:2, y:40, w:15, h:8}, {x:22, y:30, w:11, h:9}, {x:38, y:40, w:10, h:8}, {x:5, y:5, w:12, h:10}, {x:25, y:18, w:12, h:8}, {x:42, y:5, w:15, h:10}, {x:45, y:25, w:10, h:10} ] },
+                C: { rooms: [ {x:2, y:2, w:12, h:12}, {x:40, y:5, w:15, h:10}, {x:35, y:35, w:15, h:11}, {x:4, y:30, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10}, {x:48, y:30, w:10, h:8} ] }
+            };
+            levelNames.forEach(levelId => {
+                const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
+                const { rooms } = levelData[levelId];
+                rooms.forEach(room => { for (let y = room.y; y < room.y + room.h; y++) for (let x = room.x; x < room.x + room.w; x++) if (grid[y]?.[x]) grid[y][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)] }; });
+                for(let i=0; i<rooms.length-1; i++){ const rA=rooms[i], rB=rooms[i+1], s={x:Math.floor(rA.x+rA.w/2),y:Math.floor(rA.y+rA.h/2)}, e={x:Math.floor(rB.x+rB.w/2),y:Math.floor(rB.y+rB.h/2)}; const hs=Math.min(s.x,e.x), he=Math.max(s.x,e.x); for(let x=hs;x<=he;x++) for(let dy=-1;dy<=1;dy++) if(grid[s.y+dy]?.[x]) grid[s.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]}; const vs=Math.min(s.y,e.y), ve=Math.max(s.y,e.y); for(let y=vs;y<=ve;y++) for(let dx=-1;dx<=1;dx++) if(grid[y]?.[e.x+dx]) grid[y][e.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]}; }
+                for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if (grid[y][x].type === 'WALL' && Math.random() < 0.1) grid[y][x].decoration = scenerySprites[Math.floor(Math.random() * scenerySprites.length)];
+                levels[levelId] = { grid, rooms };
+            });
+            for (let i = 0; i < levelNames.length; i++) {
+                const idA = levelNames[i], idB = levelNames[(i + 1) % levelNames.length];
+                const rA = levels[idA].rooms[Math.floor(Math.random() * levels[idA].rooms.length)], xA = rA.x + 1 + Math.floor(Math.random()*(rA.w-2)), yA = rA.y + 1 + Math.floor(Math.random()*(rA.h-2)); levels[idA].grid[yA][xA] = { type: 'STAIRS', targetLevel: idB };
+                const rB = levels[idB].rooms[Math.floor(Math.random() * levels[idB].rooms.length)], xB = rB.x + 1 + Math.floor(Math.random()*(rB.w-2)), yB = rB.y + 1 + Math.floor(Math.random()*(rB.h-2)); levels[idB].grid[yB][xB] = { type: 'STAIRS', targetLevel: idA };
+            }
+            return levels;
         }
 
         function placeClues(levels, num, dist, pStart) {
-            // ... (This function is long and unchanged from the last version, so it's kept the same)
+            let clues = [], locs = [];
+            for (const id in levels) levels[id].rooms.forEach(r => { for (let y=r.y+1; y<r.y+r.h-1; y++) for (let x=r.x+1; x<r.x+r.w-1; x++) if (!(pStart&&id===pStart.level&&x===Math.floor(pStart.x/TILE_SIZE)&&y===Math.floor(pStart.y/TILE_SIZE))&&levels[id].grid[y][x].type==='FLOOR') locs.push({x,y,level:id}); });
+            for (let i=locs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[locs[i],locs[j]]=[locs[j],locs[i]];}
+            while(clues.length<num&&locs.length>0){ let loc=locs.pop(); if(!clues.some(c=>c.level===loc.level&&Math.sqrt((c.x-loc.x)**2+(c.y-loc.y)**2)<dist)) clues.push({id:`clue_${clues.length}`,x:loc.x,y:loc.y,level:loc.level,collectedByTeams:[]}); }
+            return clues;
         }
         
         function checkDeathTimers() {
