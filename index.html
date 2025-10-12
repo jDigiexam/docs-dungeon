@@ -267,8 +267,10 @@
         joinGameBtn.addEventListener('click', () => {
             const lobbyMusic = document.getElementById('lobby-music');
             const dungeonMusic = document.getElementById('dungeon-music');
+            
             lobbyMusic.play().catch(e => {});
             dungeonMusic.play().catch(e => {});
+
             setTimeout(() => {
                 dungeonMusic.pause();
                 dungeonMusic.currentTime = 0;
@@ -277,6 +279,7 @@
                     lobbyMusic.play().catch(e => console.error("Lobby music failed to play:", e));
                 }
             }, 50);
+
             const username = usernameInput.value.trim();
             if (!username) { usernameInput.style.borderColor = 'red'; return; }
             myPlayerId = `player_${Date.now()}`;
@@ -802,7 +805,20 @@
                 const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
                 const { rooms } = levelData[levelId];
                 rooms.forEach(room => { for (let y = room.y; y < room.y + room.h; y++) for (let x = room.x; x < room.x + room.w; x++) if (grid[y]?.[x]) grid[y][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)] }; });
-                for(let i=0; i<rooms.length-1; i++){ const rA=rooms[i], rB=rooms[i+1], s={x:Math.floor(rA.x+rA.w/2),y:Math.floor(rA.y+rA.h/2)}, e={x:Math.floor(rB.x+rB.w/2),y:Math.floor(rB.y+rB.h/2)}; const hs=Math.min(s.x,e.x), he=Math.max(s.x,e.x); for(let x=hs;x<=he;x++) for(let dy=-1;dy<=1;dy++) if(grid[s.y+dy]?.[x]) grid[s.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]}; const vs=Math.min(s.y,e.y), ve=Math.max(s.y,e.y); for(let y=vs;y<=ve;y++) for(let dx=-1;dx<=1;dx++) if(grid[y]?.[e.x+dx]) grid[y][e.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]}; }
+                
+                // Create a main loop
+                for(let i=0; i < rooms.length; i++){
+                    connectRooms(rooms[i], rooms[(i + 1) % rooms.length], grid);
+                }
+                // Add some random extra connections
+                for(let i=0; i < 3; i++) {
+                    const roomA = rooms[Math.floor(Math.random() * rooms.length)];
+                    const roomB = rooms[Math.floor(Math.random() * rooms.length)];
+                    if (roomA !== roomB) {
+                        connectRooms(roomA, roomB, grid);
+                    }
+                }
+
                 for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) if (grid[y][x].type === 'WALL' && Math.random() < 0.1) grid[y][x].decoration = scenerySprites[Math.floor(Math.random() * scenerySprites.length)];
                 levels[levelId] = { grid, rooms };
             });
@@ -812,6 +828,23 @@
                 const rB = levels[idB].rooms[Math.floor(Math.random() * levels[idB].rooms.length)], xB = rB.x + 1 + Math.floor(Math.random()*(rB.w-2)), yB = rB.y + 1 + Math.floor(Math.random()*(rB.h-2)); levels[idB].grid[yB][xB] = { type: 'STAIRS', targetLevel: idA };
             }
             return levels;
+        }
+
+        function connectRooms(roomA, roomB, grid) {
+            const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
+            const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
+
+            if (Math.random() > 0.5) { // Horizontal first, then vertical
+                const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+                for(let x=h_start; x<=h_end; x++) for(let dy=-1; dy<=1; dy++) if(grid[start.y+dy]?.[x]) grid[start.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
+                const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+                for(let y=v_start; y<=v_end; y++) for(let dx=-1; dx<=1; dx++) if(grid[y]?.[end.x+dx]) grid[y][end.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
+            } else { // Vertical first, then horizontal
+                const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+                for(let y=v_start; y<=v_end; y++) for(let dx=-1; dx<=1; dx++) if(grid[y]?.[start.x+dx]) grid[y][start.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
+                const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+                for(let x=h_start; x<=h_end; x++) for(let dy=-1; dy<=1; dy++) if(grid[end.y+dy]?.[x]) grid[end.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
+            }
         }
 
         function placeClues(levels, num, dist, pStart) {
@@ -951,24 +984,18 @@
         async function startLocalMedia() { 
             const lobbyMusic = document.getElementById('lobby-music');
             try { 
-                // --- MODIFIED LINE ---
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false
-                    }
+                localStream=await navigator.mediaDevices.getUserMedia({
+                    video:true,
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
                 });
-                
                 createVideoElement(myPlayerId, localStream, "YOU (Me)", true);
                 updateVideoGridLayout();
-                isMicOn = false; isCamOn = false;
-                localStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
-                localStream.getVideoTracks().forEach(t => t.enabled = isCamOn);
+                isMicOn=false;isCamOn=false;
+                localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);
+                localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);
                 updateMediaButtons(); 
-            } catch(e) {
-                console.error("Error accessing media devices.", e);
+            } catch(e){
+                console.error("Error accessing media devices.",e);
             } finally {
                 if (lobbyMusic && lobbyMusic.paused) {
                     lobbyMusic.play().catch(err => {});
