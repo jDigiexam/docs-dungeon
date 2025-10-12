@@ -267,10 +267,8 @@
         joinGameBtn.addEventListener('click', () => {
             const lobbyMusic = document.getElementById('lobby-music');
             const dungeonMusic = document.getElementById('dungeon-music');
-            
             lobbyMusic.play().catch(e => {});
             dungeonMusic.play().catch(e => {});
-
             setTimeout(() => {
                 dungeonMusic.pause();
                 dungeonMusic.currentTime = 0;
@@ -279,7 +277,6 @@
                     lobbyMusic.play().catch(e => console.error("Lobby music failed to play:", e));
                 }
             }, 50);
-
             const username = usernameInput.value.trim();
             if (!username) { usernameInput.style.borderColor = 'red'; return; }
             myPlayerId = `player_${Date.now()}`;
@@ -320,9 +317,7 @@
                 hunter.level = randomLevelName;
                 hunter.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
                 hunter.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
-                hunter.status = 'alive';
-                hunter.direction = 'right';
-                hunter.isMonster = false;
+                hunter.status = 'alive'; hunter.direction = 'right'; hunter.isMonster = false;
             });
 
             if (monster) {
@@ -339,9 +334,7 @@
                         return distance > MIN_SPAWN_DISTANCE;
                     });
                     if (isSafe) {
-                        monster.level = randomLevelName;
-                        monster.x = monsterX;
-                        monster.y = monsterY;
+                        monster.level = randomLevelName; monster.x = monsterX; monster.y = monsterY;
                         monsterSpawnFound = true;
                         break;
                     }
@@ -354,10 +347,7 @@
                     monster.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
                     monster.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
                 }
-                monster.status = 'alive';
-                monster.direction = 'right';
-                monster.isMonster = true;
-                monster.monsterSpriteIndex = monsterSpriteIndex;
+                monster.status = 'alive'; monster.direction = 'right'; monster.isMonster = true; monster.monsterSpriteIndex = monsterSpriteIndex;
             }
 
             const initialState = { players: gameState.players, levels: levels, clues: clues, npcs: npcs };
@@ -913,7 +903,7 @@
             const p = gameState.players[myPlayerId];
             if(!p || !gameState.clues || p.isMonster) return;
             const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id); updateClueCounter();}}); 
+            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);updateClueCounter();}}); 
         }
 
         function checkPlayerCollisions() { 
@@ -936,6 +926,7 @@
         function updateClueCounter() { 
             if(!gameState.clues)return;
             const myId = gameState.players[myPlayerId]?.id;
+            if (!myId) return;
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myId)).length;
             cluesText.textContent=`Chests Found: ${collectedCount}/${NUM_CLUES}`;
             if(collectedCount>=NUM_CLUES&&gameState.players[myPlayerId]&&!gameState.players[myPlayerId].hasWeapon){
