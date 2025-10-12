@@ -657,6 +657,15 @@
                         clue.collectedByTeams.push(payload.playerId);
                     }
                 })
+                .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
+            if (gameState.gamePhase === 'playing') {
+            gameState.gamePhase = 'gameover';
+            document.getElementById('dungeon-music').pause();
+            gameOverText.textContent = 'Game Over';
+            gameOverSubtext.textContent = payload.message;
+            gameOverScreen.style.display = 'flex';
+            }
+            })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
                     const deadPlayer = gameState.players[payload.playerId];
                     if (deadPlayer) {
@@ -961,6 +970,34 @@
                 }
             }
         }
+
+        function checkAllMonstersCondition() {
+    if (gameState.gamePhase !== 'playing') return;
+
+    const allPlayers = Object.values(gameState.players);
+    // This condition doesn't make sense if there's only 1 player or less.
+    if (allPlayers.length < 2) return; 
+
+    const livingPlayers = allPlayers.filter(p => p.status === 'alive');
+    
+    // If there are no living players, do nothing (another game-over condition handles this)
+    if (livingPlayers.length === 0) return;
+
+    // Check if every single player that is still 'alive' is a monster
+    const allLivingAreMonsters = livingPlayers.every(p => p.isMonster);
+
+    if (allLivingAreMonsters) {
+        // To prevent every client sending this message, we set the game phase locally first
+        gameState.gamePhase = 'gameover'; 
+        broadcastMonstersWin("You and your comrades have forever become part of the dungeon.");
+    }
+}
+
+function broadcastMonstersWin(message) {
+    if (gameChannel) {
+        gameChannel.send({ type: 'broadcast', event: 'monsters_win', payload: { message } });
+    }
+}
 
         function checkStairsUse() { 
             const p=gameState.players[myPlayerId];if(!p)return;const now=Date.now();if(p.lastStairsUse&&now-p.lastStairsUse<500)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE),tile=gameState.levels[p.level]?.grid[py]?.[px];if(tile&&tile.type==='STAIRS'){p.lastStairsUse=now;const cId=p.level;p.level=tile.targetLevel;const tL=gameState.levels[p.level];let exit=false;for(let y=0;y<MAP_HEIGHT;y++){for(let x=0;x<MAP_WIDTH;x++){const tT=tL.grid[y]?.[x];if(tT&&tT.type==='STAIRS'&&tT.targetLevel===cId){p.x=(x+0.5)*TILE_SIZE;p.y=(y+0.5)*TILE_SIZE;exit=true;break;}}if(exit)break;}broadcastPlayerState();}}
