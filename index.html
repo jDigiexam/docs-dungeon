@@ -633,12 +633,20 @@
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
+                    // Clear local players that are no longer in presence
+                    for (const id in gameState.players) {
+                        if (!Object.values(presenceState).some(pArr => pArr[0].player_id === id)) {
+                            delete gameState.players[id];
+                        }
+                    }
+                    // Add/update players from presence
                     Object.values(presenceState).forEach(presenceArr => {
                         const p = presenceArr[0];
                         if(!gameState.players[p.player_id]) {
                             gameState.players[p.player_id] = p;
                         }
                     });
+                    
                     updatePlayerListUI();
                     checkHostAndReadyStatus();
 
