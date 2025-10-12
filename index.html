@@ -214,11 +214,12 @@
             ranger:          {sx: 256, sy: 512, name: "Ranger"},
         };
         
-        const monsterSprites = [ 
-            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 128, sy: 0, sheet: 'monsters'}, {sx: 256, sy: 0, sheet: 'monsters'}, 
-            {sx: 384, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 128, sheet: 'monsters'}, {sx: 128, sy: 128, sheet: 'monsters'},
-            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 128, sy: 0, sheet: 'giants'}, {sx: 256, sy: 0, sheet: 'giants'}
+        const giantSprites = [
+            {sx: 0,   sy: 0, sheet: 'giants'},
+            {sx: 128, sy: 0, sheet: 'giants'},
+            {sx: 256, sy: 0, sheet: 'giants'}
         ];
+
         const clueSprite = {sx: 128, sy: 0}; 
         const weaponSprite = {sx: 384, sy: 128}; 
         const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
@@ -247,6 +248,7 @@
             for (const key of assetKeys) {
                 assets[key].src = assetSources[key];
                 assets[key].onload = assetLoaded;
+                assets[key].onerror = () => console.error(`Failed to load asset: ${assetSources[key]}`);
             }
 
             resizeCanvas();
@@ -344,7 +346,7 @@
             const playerIds = Object.values(gameState.players).map(p => p.id);
             playerIds.sort(() => Math.random() - 0.5);
             const monsterId = playerIds.length > 0 ? playerIds[0] : null;
-            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
+            const monsterSpriteIndex = Math.floor(Math.random() * giantSprites.length);
             const levels = generateLevels();
             const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
 
@@ -417,7 +419,6 @@
         }
 
         // --- 3. DRAWING & RENDERING ---
-        // (This section contains drawing functions like drawGame, drawPlayer, etc. and is unchanged)
         function drawGame() {
             if (!ctx || !myPlayerId || !gameState.players[myPlayerId] || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
             const myPlayer = gameState.players[myPlayerId];
@@ -473,7 +474,7 @@
             let spritesheet;
 
             if (player.isMonster) {
-                const monster = monsterSprites[player.monsterSpriteIndex];
+                const monster = giantSprites[player.monsterSpriteIndex];
                 spriteInfo = {sx: monster.sx, sy: monster.sy};
                 spritesheet = assets[monster.sheet];
             } else {
@@ -537,8 +538,9 @@
                             ctx.fillText(tile.targetLevel, xPos + TILE_SIZE / 2, yPos + TILE_SIZE / 2);
                         }
                     }
-                    if (tile.scenery) {
-                         ctx.drawImage(assets.scenery, tile.scenery.sx, tile.scenery.sy, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
+
+                    if (tile.decoration) {
+                         ctx.drawImage(assets.scenery, tile.decoration.sx, tile.decoration.sy, SPRITE_SIZE, SPRITE_SIZE, xPos, yPos, TILE_SIZE, TILE_SIZE);
                     }
                 }
             }
@@ -836,6 +838,17 @@
                     const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
                     for(let y = v_start; y <= v_end; y++) for(let dx = -1; dx <= 1; dx++) if (grid[y]?.[end.x + dx]) grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
                 }
+                
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    for (let x = 0; x < MAP_WIDTH; x++) {
+                        if (grid[y][x].type === 'WALL') {
+                            if (Math.random() < 0.1) {
+                                grid[y][x].decoration = scenerySprites[Math.floor(Math.random() * scenerySprites.length)];
+                            }
+                        }
+                    }
+                }
+
                 levels[levelId] = { grid, rooms };
             });
 
