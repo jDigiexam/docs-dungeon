@@ -776,36 +776,56 @@
             return check(gridX1, gridY1) || check(gridX2, gridY1) || check(gridX1, gridY2) || check(gridX2, gridY2);
         }
 
-        function updateMyPlayerPosition() {
-            const player = gameState.players[myPlayerId];
-            if (!player || player.status !== 'alive') return;
-            const currentLevel = gameState.levels[player.level];
-            if (!currentLevel) return;
+       function updateMyPlayerPosition() {
+    const player = gameState.players[myPlayerId];
+    if (!player || player.status !== 'alive') return;
+    const currentLevel = gameState.levels[player.level];
+    if (!currentLevel) return;
 
-            let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
-            let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
-            const mag = Math.sqrt(dx**2 + dy**2);
-            
-            if (mag > 0) {
-                const moveSpeed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
-                const moveX = (dx / mag) * moveSpeed;
-                const moveY = (dy / mag) * moveSpeed;
-                
-                if (Math.abs(moveX) > 0.1) player.direction = moveX > 0 ? 'right' : 'left';
+    let dx = joystick.active ? joystick.dx : (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+    let dy = joystick.active ? joystick.dy : (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
+    const mag = Math.sqrt(dx**2 + dy**2);
+    
+    if (mag > 0) {
+        const moveSpeed = player.isMonster ? MONSTER_SPEED : PLAYER_SPEED;
+        const moveX = (dx / mag) * moveSpeed;
+        const moveY = (dy / mag) * moveSpeed;
+        
+        if (Math.abs(moveX) > 0.1) {
+            player.direction = moveX > 0 ? 'right' : 'left';
+        }
 
-                let moved = false;
-                if (!isColliding(player.x + moveX, player.y, currentLevel.grid)) {
-                    player.x += moveX;
-                    moved = true;
-                }
-                if (!isColliding(player.x, player.y + moveY, currentLevel.grid)) {
-                    player.y += moveY;
-                    moved = true;
-                }
+        // --- NEW, MORE ROBUST MOVEMENT LOGIC ---
+        let targetX = player.x + moveX;
+        let targetY = player.y + moveY;
 
-                if(moved) broadcastPlayerState();
+        // Check if the final diagonal destination is a collision
+        if (isColliding(targetX, targetY, currentLevel.grid)) {
+            // It is. Let's try sliding along the X-axis first.
+            if (!isColliding(targetX, player.y, currentLevel.grid)) {
+                targetY = player.y; // Cancel Y movement, allow X
+            } 
+            // If X is blocked, try sliding along the Y-axis.
+            else if (!isColliding(player.x, targetY, currentLevel.grid)) {
+                targetX = player.x; // Cancel X movement, allow Y
+            } 
+            // If both are blocked, don't move at all.
+            else {
+                targetX = player.x;
+                targetY = player.y;
             }
         }
+        
+        const moved = player.x !== targetX || player.y !== targetY;
+
+        player.x = targetX;
+        player.y = targetY;
+        
+        if(moved) {
+            broadcastPlayerState();
+        }
+    }
+}
         
         // --- 6. GAME MECHANICS ---
         function generateLevels() {
