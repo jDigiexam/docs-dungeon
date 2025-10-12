@@ -586,25 +586,6 @@
             });
         }
 
-        function checkHostAndReadyStatus() {
-            if (!gameChannel) return;
-            const presences = Object.keys(gameChannel.presenceState()).sort();
-            if (presences.length > 0) {
-                const hostId = gameChannel.presenceState()[presences[0]][0].id;
-                Object.values(gameState.players).forEach(p => p.isHost = p.id === hostId);
-            }
-
-            const me = gameState.players[myPlayerId];
-            if (me && me.isHost) {
-                startGameBtn.style.display = 'block';
-                const allReady = Object.values(gameState.players).every(p => p.isReady);
-                startGameBtn.disabled = !allReady;
-            } else {
-                startGameBtn.style.display = 'none';
-            }
-             updatePlayerListUI();
-        }
-
 // --- 4. SUPABASE REALTIME ---
 async function setupSupabaseChannels() {
     const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
