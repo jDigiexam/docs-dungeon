@@ -658,20 +658,25 @@
                     }
                 })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
-                    const deadPlayer = gameState.players[payload.playerId];
-                    if (deadPlayer) {
-                        deadPlayer.status = 'dead';
-                        deadPlayer.deathTimestamp = Date.now();
-                        if (payload.playerId === myPlayerId) {
-                            statusText.textContent = 'Status: Dead';
-                            gameOverText.textContent = 'You Have Died';
-                            gameOverSubtext.textContent = 'A teammate can revive you... but hurry!';
-                            gameOverScreen.style.display = 'flex';
-                            setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
-                        }
-                        checkWinConditions();
-                    }
-                })
+    const deadPlayer = gameState.players[payload.playerId];
+    if (deadPlayer) {
+        deadPlayer.status = 'dead';
+        deadPlayer.deathTimestamp = Date.now();
+        if (payload.playerId === myPlayerId) {
+            statusText.textContent = 'Status: Dead';
+            gameOverText.textContent = 'You Have Died';
+            gameOverSubtext.textContent = 'A teammate can revive you... but hurry!';
+            gameOverScreen.style.display = 'flex';
+            setTimeout(() => { gameOverScreen.style.display = 'none'; }, 5000);
+        }
+        
+        // --- CHANGE IS HERE ---
+        // Only the host should check for win conditions
+        if (gameState.players[myPlayerId]?.isHost) {
+            checkWinConditions();
+        }
+    }
+})
                 .on('broadcast', { event: 'player_resurrected' }, ({ payload }) => {
                     const resurrectedPlayer = gameState.players[payload.playerId];
                     if (resurrectedPlayer) {
