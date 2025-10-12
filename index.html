@@ -393,40 +393,45 @@
             }
         }
         
-        function gameLoop(timestamp) {
-            if (!lastTime) lastTime = timestamp;
-            const deltaTime = (timestamp - lastTime) / 1000;
-            lastTime = timestamp;
-
-            if (gameState.players[myPlayerId]?.isHost) {
-                checkDeathTimers();
-            }
-
-            if (gameState.gamePhase !== 'playing') {
-                requestAnimationFrame(gameLoop);
-                return;
-            }
-
-            // Let the host control NPC movement and broadcast it
-            if (gameState.players[myPlayerId]?.isHost) {
-                updateNpcs(deltaTime);
-                if(gameChannel) gameChannel.send({type: 'broadcast', event: 'npcs_update', payload: gameState.npcs});
-            }
-
-            if (!gameState.players[myPlayerId] || gameState.players[myPlayerId].status === 'dead') {
-                drawGame(); 
-                requestAnimationFrame(gameLoop);
-                return;
-            }
+                   function gameLoop(timestamp) {
+                if (!lastTime) lastTime = timestamp;
+                const deltaTime = (timestamp - lastTime) / 1000;
+                lastTime = timestamp;
             
-            updateMyPlayerPosition(deltaTime);
-            checkClueCollection();
-            checkPlayerCollisions();
-            checkResurrection();
-            checkStairsUse();
-            drawGame();
-            requestAnimationFrame(gameLoop);
-        }
+                if (gameState.players[myPlayerId]?.isHost) {
+                    checkDeathTimers();
+                }
+            
+                if (gameState.gamePhase !== 'playing') {
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+                
+                const myPlayer = gameState.players[myPlayerId];
+            
+                if (!myPlayer || myPlayer.status === 'dead') {
+                    drawGame(); 
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+                
+                // Check for clue collection first
+                checkClueCollection();
+            
+                // Update UI based on role
+                if (myPlayer.isMonster) {
+                    updateMonsterUI();
+                } else {
+                    updateClueCounter(); 
+                }
+                
+                updateMyPlayerPosition(deltaTime);
+                checkPlayerCollisions();
+                checkResurrection();
+                checkStairsUse();
+                drawGame();
+                requestAnimationFrame(gameLoop);
+            }
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
@@ -906,6 +911,25 @@
                 gameState.players[myPlayerId].hasWeapon=true;
                 broadcastPlayerState();
             }
+        }
+        // --- NEW FUNCTION ---
+        function updateMonsterUI() {
+            if (!gameState.clues) return;
+        
+            // Find the maximum number of chests collected by any single hunter
+            let maxChests = 0;
+            const hunters = Object.values(gameState.players).filter(p => !p.isMonster);
+            
+            hunters.forEach(hunter => {
+                const hunterChestCount = gameState.clues.filter(c => c.collectedByTeams.includes(hunter.id)).length;
+                if (hunterChestCount > maxChests) {
+                    maxChests = hunterChestCount;
+                }
+            });
+        
+            // Update the monster's UI text
+            cluesText.textContent = `Threat Level: ${maxChests}/${NUM_CLUES}`;
+            statusText.textContent = 'Status: Hunting';
         }
         
         // --- 7. WEBRTC & 8. CHAT ---
