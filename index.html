@@ -20,14 +20,9 @@
             <div id="clues-text" class="text-lg">Chests Found: 0/7</div>
         </div>
         
-        <div class="flex space-x-2">
-            <div class="w-1/2 relative aspect-square">
-                <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover bg-gray-700 rounded-md border-2 border-gray-500"></video>
-                <div id="local-video-overlay" class="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-bold">YOU</div>
-            </div>
-            <div id="remote-videos-container" class="w-1/2 bg-gray-700 rounded-md flex items-center justify-center text-sm relative overflow-hidden aspect-square">
-                <span id="remote-video-placeholder">Teammate</span>
-            </div>
+        <!-- MODIFIED: Replaced old video divs with a single dynamic grid container -->
+        <div id="video-streams-container" class="grid grid-cols-1 gap-2 aspect-video">
+            <!-- Video elements will be dynamically added here by JavaScript -->
         </div>
 
         <div class="flex justify-center space-x-4">
@@ -132,8 +127,7 @@
         const chatMessages = document.getElementById('chat-messages');
         const cluesText = document.getElementById('clues-text');
         const statusText = document.getElementById('status-text');
-        const localVideo = document.getElementById('local-video');
-        const remoteVideosContainer = document.getElementById('remote-videos-container');
+        const videoStreamsContainer = document.getElementById('video-streams-container');
         const toggleMicBtn = document.getElementById('toggle-mic-btn');
         const toggleCamBtn = document.getElementById('toggle-cam-btn');
         const micOnIcon = document.getElementById('mic-on-icon');
@@ -806,30 +800,19 @@
             gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push('team1');updateClueCounter();}}); 
         }
 
-function checkPlayerCollisions() { 
-    const me = gameState.players[myPlayerId];
-    if(!me || me.status !== 'alive') return;
-
-    for(const otherId in gameState.players) {
-        if(otherId === myPlayerId) continue;
-        
-        const other = gameState.players[otherId];
-        if(other.status !== 'alive' || other.level !== me.level) continue;
-
-        const distance = Math.sqrt((me.x - other.x)**2 + (me.y - other.y)**2);
-
-        if(distance < TILE_SIZE * 0.7) {
-            // Hunter kills Monster
-            if (me.hasWeapon && other.isMonster) {
-                broadcastMonsterKilled(me.username);
-            }
-            // --- MODIFIED: Monster can only kill non-monsters ---
-            if (me.isMonster && !other.isMonster) {
-                broadcastPlayerKilled(otherId);
+        function checkPlayerCollisions() { 
+            const me = gameState.players[myPlayerId];
+            if(!me || me.status !== 'alive') return;
+            for(const oId in gameState.players){
+                if(oId === myPlayerId) continue;
+                const o = gameState.players[oId];
+                if(o.status !== 'alive' || o.level !== me.level) continue;
+                if(Math.sqrt((me.x - o.x)**2 + (me.y - o.y)**2) < TILE_SIZE * 0.7){
+                    if(me.hasWeapon && o.isMonster) broadcastMonsterKilled(me.username);
+                    if(me.isMonster && !o.isMonster) broadcastPlayerKilled(oId);
+                }
             }
         }
-    }
-}
 
         function checkStairsUse() { 
             const p=gameState.players[myPlayerId];if(!p)return;const now=Date.now();if(p.lastStairsUse&&now-p.lastStairsUse<500)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE),tile=gameState.levels[p.level]?.grid[py]?.[px];if(tile&&tile.type==='STAIRS'){p.lastStairsUse=now;const cId=p.level;p.level=tile.targetLevel;const tL=gameState.levels[p.level];let exit=false;for(let y=0;y<MAP_HEIGHT;y++){for(let x=0;x<MAP_WIDTH;x++){const tT=tL.grid[y]?.[x];if(tT&&tT.type==='STAIRS'&&tT.targetLevel===cId){p.x=(x+0.5)*TILE_SIZE;p.y=(y+0.5)*TILE_SIZE;exit=true;break;}}if(exit)break;}broadcastPlayerState();}}
@@ -844,12 +827,67 @@ function checkPlayerCollisions() {
         }
         
         // --- 7. WEBRTC & 8. CHAT ---
-        async function startLocalMedia() { try { localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localVideo.srcObject=localStream;isMicOn=false;isCamOn=false;localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);updateMediaButtons(); } catch(e){console.error("Error accessing media devices.",e);}}
+        async function startLocalMedia() { 
+            try { 
+                localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+                createVideoElement(myPlayerId, localStream, "YOU (Me)", true);
+                updateVideoGridLayout();
+                isMicOn=false;isCamOn=false;
+                localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);
+                localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);
+                updateMediaButtons(); 
+            } catch(e){console.error("Error accessing media devices.",e);}
+        }
         function updateMediaButtons() { micOnIcon.classList.toggle('hidden',!isMicOn);micOffIcon.classList.toggle('hidden',isMicOn);toggleMicBtn.classList.toggle('bg-green-600',isMicOn);toggleMicBtn.classList.toggle('bg-red-600',!isMicOn);camOnIcon.classList.toggle('hidden',!isCamOn);camOffIcon.classList.toggle('hidden',isCamOn);toggleCamBtn.classList.toggle('bg-green-600',isCamOn);toggleCamBtn.classList.toggle('bg-red-600',!isCamOn); }
         toggleMicBtn.addEventListener('click', () => { isMicOn=!isMicOn; if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);updateMediaButtons(); });
         toggleCamBtn.addEventListener('click', () => { isCamOn=!isCamOn; if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);updateMediaButtons(); });
+        
+        function createVideoElement(playerId, stream, username, isMuted = false) {
+            let videoContainer = document.getElementById(`video-container-${playerId}`);
+            if (videoContainer) return; // Already exists
+
+            videoContainer = document.createElement('div');
+            videoContainer.id = `video-container-${playerId}`;
+            videoContainer.className = 'relative bg-gray-700 rounded-md overflow-hidden';
+            
+            const videoElement = document.createElement('video');
+            videoElement.autoplay = true; 
+            videoElement.playsInline = true;
+            videoElement.muted = isMuted;
+            videoElement.className = 'w-full h-full object-cover';
+            videoElement.srcObject = stream;
+
+            const nameOverlay = document.createElement('div');
+            nameOverlay.className = 'absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded';
+            nameOverlay.textContent = username;
+            
+            videoContainer.append(videoElement, nameOverlay);
+            videoStreamsContainer.appendChild(videoContainer);
+        }
+
+        function updateVideoGridLayout() {
+            const count = Object.keys(gameState.players).length;
+            videoStreamsContainer.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-rows-2');
+            if (count <= 2) {
+                videoStreamsContainer.classList.add('grid-cols-2');
+            } else {
+                videoStreamsContainer.classList.add('grid-cols-2', 'grid-rows-2');
+            }
+        }
+        
         function sendRtcSignal(to, data) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } }); }
-        function createPeerConnection(peerId, isInitiator) { if(peerConnections[peerId]||!localStream)return;peerConnections[peerId]=new RTCPeerConnection(peerConnectionConfig);localStream.getTracks().forEach(t=>peerConnections[peerId].addTrack(t,localStream));peerConnections[peerId].onicecandidate=e=>{if(e.candidate)sendRtcSignal(peerId,{ice:e.candidate});};peerConnections[peerId].ontrack=e=>{let vC=document.getElementById(`video-container-${peerId}`);if(!vC){remoteVideosContainer.innerHTML='';vC=document.createElement('div');vC.id=`video-container-${peerId}`;vC.className='w-full h-full relative';const vE=document.createElement('video');vE.autoplay=true;vE.playsInline=true;vE.className='w-full h-full object-cover';vE.srcObject=e.streams[0];const nO=document.createElement('div');nO.className='absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded';nO.textContent=gameState.players[peerId]?.username||'Player';vC.append(vE,nO);remoteVideosContainer.appendChild(vC);}else{vC.querySelector('video').srcObject=e.streams[0];}};if(isInitiator){peerConnections[peerId].createOffer().then(o=>peerConnections[peerId].setLocalDescription(o)).then(()=>sendRtcSignal(peerId,{sdp:peerConnections[peerId].localDescription}));}}
+        
+        function createPeerConnection(peerId, isInitiator) { 
+            if(peerConnections[peerId]||!localStream)return;
+            peerConnections[peerId]=new RTCPeerConnection(peerConnectionConfig);
+            localStream.getTracks().forEach(t=>peerConnections[peerId].addTrack(t,localStream));
+            peerConnections[peerId].onicecandidate=e=>{if(e.candidate)sendRtcSignal(peerId,{ice:e.candidate});};
+            peerConnections[peerId].ontrack=e=>{
+                createVideoElement(peerId, e.streams[0], gameState.players[peerId]?.username || 'Player');
+                updateVideoGridLayout();
+            };
+            if(isInitiator){peerConnections[peerId].createOffer().then(o=>peerConnections[peerId].setLocalDescription(o)).then(()=>sendRtcSignal(peerId,{sdp:peerConnections[peerId].localDescription}));}
+        }
         function handleRtcSignal({ from, to, data }) { if (to !== myPlayerId) return; let pc = peerConnections[from]; if (!pc) { createPeerConnection(from, false); pc = peerConnections[from]; } if (data.sdp) { pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => { if (data.sdp.type === 'offer') { pc.createAnswer().then(a => pc.setLocalDescription(a)).then(() => sendRtcSignal(from, { sdp: pc.localDescription })); } }); } else if (data.ice) { pc.addIceCandidate(new RTCIceCandidate(data.ice)); } }
         chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && chatInput.value.trim() !== '') { if (!gameChannel) return; const msg = { username: gameState.players[myPlayerId]?.username || 'Player', text: chatInput.value.trim(), color: '#FFFFFF' }; gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: msg }); displayChatMessage(msg); chatInput.value = ''; } });
         function displayChatMessage({ username, text, color }) { const msgEl = document.createElement('p'); msgEl.classList.add('mb-1'); const userSpan = document.createElement('span'); userSpan.textContent = `${username}: `; userSpan.style.fontWeight = 'bold'; userSpan.style.color = color; msgEl.appendChild(userSpan); msgEl.append(document.createTextNode(text)); chatMessages.appendChild(msgEl); chatBox.scrollTop = chatBox.scrollHeight; }
