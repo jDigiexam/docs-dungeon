@@ -176,8 +176,8 @@
         // Game Constants
         const TILE_SIZE = 128;
         const SPRITE_SIZE = 128;
-        const MAP_WIDTH = 100; 
-        const MAP_HEIGHT = 80;
+        const MAP_WIDTH = 60; 
+        const MAP_HEIGHT = 50;
         const NUM_CLUES = 7;
         const MIN_CLUE_DISTANCE = 10;
         const PLAYER_SPEED = 10; 
@@ -544,7 +544,7 @@
                      const tile = level.grid[y][x];
                      if (tile.type === 'STAIRS') {
                         minimapCtx.fillStyle = '#a78bfa'; // Lighter purple for stairs
-                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth * 2), Math.ceil(tileHeight * 2)); // Make them 2x2 tiles size for visibility
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, Math.ceil(tileWidth * 2.5), Math.ceil(tileHeight * 2.5));
                     }
                 }
             }
@@ -555,7 +555,7 @@
 
             minimapCtx.fillStyle = 'yellow';
             minimapCtx.beginPath();
-            minimapCtx.arc(playerMapX, playerMapY, 4, 0, Math.PI * 2); // Increased radius to 4
+            minimapCtx.arc(playerMapX, playerMapY, 5, 0, Math.PI * 2);
             minimapCtx.fill();
         }
 
@@ -669,48 +669,6 @@
                 });
         }
         
-        function updatePlayerListUI() {
-            if (gameState.gamePhase !== 'lobby') return;
-            playerList.innerHTML = '';
-            Object.values(gameState.players).forEach(player => {
-                const playerEl = document.createElement('div');
-                playerEl.className = 'flex items-center justify-between p-2 bg-gray-600 rounded';
-                playerEl.innerHTML = `
-                    <div class="flex items-center">
-                        <canvas class="w-8 h-8 mr-2" data-sprite="${player.spriteStyle}"></canvas>
-                        <span>${player.username} ${player.isHost ? '(Host)' : ''}</span>
-                    </div>
-                    <span class="text-2xl">${player.isReady ? '✅' : '❌'}</span>
-                `;
-                playerList.appendChild(playerEl);
-                const playerCanvas = playerEl.querySelector('canvas');
-                const pctx = playerCanvas.getContext('2d');
-                const spriteInfo = sprites[player.spriteStyle];
-                if(spriteInfo && assets.chars.complete) {
-                    pctx.imageSmoothingEnabled = false;
-                    pctx.drawImage(assets.chars, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, 32, 32);
-                }
-            });
-        }
-
-        function checkHostAndReadyStatus() {
-            const presences = Object.keys(gameChannel.presenceState()).sort();
-            if (presences.length > 0) {
-                const hostId = gameChannel.presenceState()[presences[0]][0].player_id;
-                Object.values(gameState.players).forEach(p => p.isHost = p.id === hostId);
-            }
-
-            const me = gameState.players[myPlayerId];
-            if (me && me.isHost) {
-                startGameBtn.style.display = 'block';
-                const allReady = Object.values(gameState.players).every(p => p.isReady);
-                startGameBtn.disabled = !allReady;
-            } else {
-                startGameBtn.style.display = 'none';
-            }
-             updatePlayerListUI();
-        }
-
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
         function broadcastWeaponSpawn(teamId, x, y, level) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y, level } }); }
@@ -809,25 +767,25 @@
                 A: {
                     elevators: [],
                     rooms: [
-                        {x:2, y:2, w:12, h:10}, {x:20, y:2, w:10, h:12}, {x:35, y:2, w:15, h:9},
-                        {x:4, y:20, w:10, h:10}, {x:40, y:20, w:12, h:12}, {x:20, y:30, w:15, h:10},
-                        {x:4, y:35, w:11, h:9}, {x:45, y:35, w:12, h:10}
+                        {x:5, y:5, w:15, h:10}, {x:30, y:8, w:10, h:15}, {x:50, y:5, w:20, h:10},
+                        {x:80, y:10, w:15, h:15}, {x:5, y:30, w:20, h:20}, {x:35, y:40, w:15, h:15},
+                        {x:60, y:30, w:20, h:20}, {x:80, y:50, w:15, h:25}
                     ]
                 },
                 B: {
                     elevators: [],
                     rooms: [
-                        {x:2, y:2, w:15, h:10}, {x:22, y:2, w:11, h:11}, {x:38, y:5, w:10, h:12},
-                        {x:5, y:18, w:12, h:12}, {x:25, y:22, w:12, h:10}, {x:42, y:25, w:15, h:12},
-                        {x:2, y:35, w:10, h:10}, {x:20, y:38, w:12, h:9}
+                        {x:2, y:60, w:15, h:10}, {x:22, y:50, w:11, h:9}, {x:38, y:65, w:10, h:10},
+                        {x:5, y:5, w:12, h:10}, {x:25, y:22, w:12, h:8}, {x:42, y:5, w:15, h:10},
+                        {x:60, y:10, w:10, h:18}, {x:80, y:20, w:12, h:9}
                     ]
                 },
                 C: {
                     elevators: [],
                     rooms: [
-                         {x:2, y:2, w:12, h:12}, {x:20, y:5, w:10, h:10}, {x:35, y:2, w:15, h:11},
-                         {x:4, y:20, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10},
-                         {x:5, y:35, w:15, h:10}, {x:30, y:38, w:12, h:9}
+                         {x:2, y:2, w:12, h:12}, {x:80, y:5, w:15, h:10}, {x:35, y:60, w:15, h:11},
+                         {x:4, y:50, w:10, h:10}, {x:22, y:22, w:12, h:10}, {x:40, y:20, w:12, h:8},
+                         {x:65, y:30, w:15, h:8}, {x:80, y:45, w:12, h:9}
                     ]
                 }
             };
