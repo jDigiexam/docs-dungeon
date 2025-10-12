@@ -15,8 +15,8 @@
 </head>
 <body class="bg-gray-900 text-white overflow-hidden h-screen flex flex-col md:flex-row items-stretch">
 
-    <!-- UI Panel (Left Side on Desktop, Bottom on Mobile) --><div id="ui-panel" class="w-full md:w-72 lg:w-96 bg-gray-800 p-4 flex flex-col space-y-2 overflow-y-auto order-last md:order-first h-1/3 md:h-full">
-        <!-- Status & Clues --><div class="bg-gray-900/50 p-2 rounded">
+    <!-- UI Panel (Left Side on Desktop, Bottom on Mobile) --><div id="ui-panel" class="w-full md:w-72 lg:w-96 bg-gray-800 p-4 flex-col space-y-2 overflow-y-auto order-last md:order-first h-1/3 md:h-full hidden md:flex">
+        <!-- Status & Clues --><div id="game-status-panel" class="bg-gray-900/50 p-2 rounded hidden">
             <div id="status-text" class="text-lg">Status: Alive</div>
             <div id="clues-text" class="text-lg">Chests Found: 0/7</div>
         </div>
@@ -62,14 +62,14 @@
 
     <!-- Main Game Container --><div id="game-container" class="relative flex-grow bg-black shadow-lg rounded-lg overflow-hidden">
         
-        <!-- Loading Screen --><div id="loading-screen" class="absolute inset-0 bg-gray-900 flex items-center justify-center z-30">
+        <!-- Loading Screen --><div id="loading-screen" class="absolute inset-0 bg-gray-900 flex items-center justify-center z-50">
             <div class="text-center">
                 <h1 class="text-4xl font-bold mb-4">Dungeon Mystery</h1>
                 <p>Loading Assets...</p>
             </div>
         </div>
 
-        <!-- Lobby Screen --><div id="lobby-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-20 hidden">
+        <!-- Character Creation Screen --><div id="char-creation-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-40 hidden">
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
                 <h2 class="text-2xl mb-4">Choose Your Hero</h2>
                 
@@ -92,14 +92,25 @@
                 <button id="join-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded w-full">Join Game</button>
             </div>
         </div>
+
+        <!-- Ready Room Screen --><div id="ready-room-screen" class="absolute inset-0 bg-gray-800 flex-col items-center justify-center z-30 hidden p-8">
+            <h2 class="text-3xl mb-6">Game Lobby</h2>
+            <div id="player-list" class="w-full max-w-lg bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
+                <!-- Player entries will be generated here -->
+            </div>
+            <div class="flex space-x-4">
+                <button id="ready-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded text-xl">Ready Up</button>
+                <button id="start-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden disabled:opacity-50" disabled>Start Game</button>
+            </div>
+        </div>
         
-        <!-- Game Over Screen --><div id="game-over-screen" class="absolute inset-0 bg-black/70 flex-col items-center justify-center z-40 hidden">
+        <!-- Game Over Screen --><div id="game-over-screen" class="absolute inset-0 bg-black/70 flex-col items-center justify-center z-20 hidden">
             <h2 id="game-over-text" class="text-5xl font-bold text-white mb-4">Game Over</h2>
             <p id="game-over-subtext" class="text-xl text-gray-300"></p>
         </div>
 
 
-        <!-- Game Screen --><div id="game-screen" class="relative w-full h-full">
+        <!-- Game Screen --><div id="game-screen" class="relative w-full h-full hidden">
             <canvas id="game-canvas" class="w-full h-full"></canvas>
             <canvas id="minimap-canvas" class="absolute top-4 right-4 border-2 border-gray-500 bg-black/50" width="200" height="160"></canvas>
 
@@ -122,8 +133,15 @@
         const minimapCanvas = document.getElementById('minimap-canvas');
         const minimapCtx = minimapCanvas.getContext('2d');
         const loadingScreen = document.getElementById('loading-screen');
-        const lobbyScreen = document.getElementById('lobby-screen');
+        const charCreationScreen = document.getElementById('char-creation-screen');
+        const readyRoomScreen = document.getElementById('ready-room-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const uiPanel = document.getElementById('ui-panel');
+        const gameStatusPanel = document.getElementById('game-status-panel');
         const joinGameBtn = document.getElementById('join-game-btn');
+        const readyBtn = document.getElementById('ready-btn');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const playerList = document.getElementById('player-list');
         const usernameInput = document.getElementById('username-input');
         const chatInput = document.getElementById('chat-input');
         const chatBox = document.getElementById('chat-box');
@@ -149,7 +167,8 @@
             players: {}, 
             levels: {},
             clues: [],
-            weapon: { id: 'weapon', x: -1, y: -1, level: null, spawnedForTeam: null }
+            weapon: { id: 'weapon', x: -1, y: -1, level: null, spawnedForTeam: null },
+            gamePhase: 'loading' // loading, lobby, playing
         };
         let myPlayerId = null;
         let gameChannel = null;
@@ -219,7 +238,7 @@
                 assetsLoadedCount++;
                 if (assetsLoadedCount === assetsToLoad) {
                     loadingScreen.style.display = 'none';
-                    lobbyScreen.style.display = 'flex';
+                    charCreationScreen.style.display = 'flex';
                     setupLobby();
                 }
             }
@@ -260,7 +279,7 @@
             if (!container) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
-            if(assetsLoadedCount > 0) drawGame(); 
+            if(assetsLoadedCount > 0 && gameState.gamePhase === 'playing') drawGame(); 
         }
 
         joinGameBtn.addEventListener('click', () => {
@@ -271,35 +290,75 @@
                 return;
             }
             myPlayerId = `player_${Date.now()}`;
-            joinGame(username);
+            joinLobby(username);
+        });
+
+        readyBtn.addEventListener('click', () => {
+            const me = gameState.players[myPlayerId];
+            if (me) {
+                me.isReady = !me.isReady;
+                readyBtn.textContent = me.isReady ? 'Unready' : 'Ready Up';
+                readyBtn.classList.toggle('bg-yellow-500', me.isReady);
+                readyBtn.classList.toggle('hover:bg-yellow-400', me.isReady);
+                readyBtn.classList.toggle('bg-green-600', !me.isReady);
+                readyBtn.classList.toggle('hover:bg-green-500', !me.isReady);
+                broadcastPlayerState();
+            }
+        });
+
+        startGameBtn.addEventListener('click', () => {
+            if (gameChannel) {
+                gameChannel.send({ type: 'broadcast', event: 'start_game', payload: {} });
+            }
         });
 
         // --- 2. GAME LOGIC ---
-        async function joinGame(username) {
-            lobbyScreen.style.display = 'none';
+        async function joinLobby(username) {
+            charCreationScreen.style.display = 'none';
+            readyRoomScreen.style.display = 'flex';
+            uiPanel.style.display = 'flex';
+            gameState.gamePhase = 'lobby';
+
             await startLocalMedia();
 
-            gameState.levels = generateLevels();
-            
-            const startRoom = gameState.levels.A.rooms[Math.floor(Math.random() * gameState.levels.A.rooms.length)];
-            const startX = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
-            const startY = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
-
-            gameState.clues = placeClues(gameState.levels, NUM_CLUES, MIN_CLUE_DISTANCE, {x: startX, y: startY, level: 'A'});
-
             gameState.players[myPlayerId] = {
-                id: myPlayerId, username, x: startX, y: startY, level: 'A', teamId: myPlayerId, status: 'alive',
-                isMonster: false, hasWeapon: false, lastStairsUse: 0,
-                spriteStyle: spriteStyleSelect.value, direction: 'right'
+                id: myPlayerId, username,
+                isReady: false, isHost: false,
+                spriteStyle: spriteStyleSelect.value,
             };
 
             await setupSupabaseChannels();
+        }
+
+        function startGame() {
+            gameState.gamePhase = 'playing';
+            readyRoomScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+            gameStatusPanel.style.display = 'block';
+            
+            // Assign roles and generate level data for all players consistently
+            const presences = Object.keys(gameChannel.presenceState()).sort();
+            const monsterId = presences[1] ? gameState.players[presenceState[presences[1]][0].player_id]?.id : null;
+            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
+
+            Object.values(gameState.players).forEach(p => {
+                const startRoom = gameState.levels.A.rooms[Math.floor(Math.random() * gameState.levels.A.rooms.length)];
+                p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+                p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+                p.level = 'A';
+                p.status = 'alive';
+                p.direction = 'right';
+                p.isMonster = p.id === monsterId;
+                if(p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
+            });
+
+            gameState.clues = placeClues(gameState.levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
+            
             gameLoop();
         }
 
         function gameLoop() {
-            if (gameState.players[myPlayerId]?.status !== 'alive') {
-                drawGame(); 
+            if (gameState.gamePhase !== 'playing' || gameState.players[myPlayerId]?.status !== 'alive') {
                 return;
             }
             updateMyPlayerPosition();
@@ -313,7 +372,7 @@
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
-            if (!ctx || !myPlayerId || assetsLoadedCount < Object.keys(assets).length) return;
+            if (!ctx || !myPlayerId || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
             const myPlayer = gameState.players[myPlayerId];
             if (!myPlayer) return;
             
@@ -506,7 +565,18 @@
              gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
 
             gameChannel
-                .on('broadcast', { event: 'player_update' }, ({ payload }) => { if (payload.id && payload.id !== myPlayerId) gameState.players[payload.id] = payload; })
+                .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
+                    if (payload.id && gameState.players[payload.id]) {
+                        Object.assign(gameState.players[payload.id], payload);
+                    } else {
+                        gameState.players[payload.id] = payload;
+                    }
+                    if(gameState.gamePhase === 'lobby') {
+                        updatePlayerListUI();
+                        checkHostAndReadyStatus();
+                    }
+                 })
+                .on('broadcast', { event: 'start_game' }, () => startGame())
                 .on('broadcast', { event: 'assign_monster' }, ({ payload }) => {
                     if (gameState.players[payload.playerId]) {
                         gameState.players[payload.playerId].isMonster = true;
@@ -563,14 +633,15 @@
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
-                    const presences = Object.keys(presenceState).sort();
-                    if (presences.length >= 2 && !Object.values(gameState.players).some(p => p.isMonster)) {
-                        if (myPlayerId === presenceState[presences[0]][0].player_id) { 
-                            const monsterId = presenceState[presences[1]][0].player_id;
-                            const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
-                            broadcastAssignMonster(monsterId, monsterSpriteIndex);
+                    Object.values(presenceState).forEach(presenceArr => {
+                        const p = presenceArr[0];
+                        if(!gameState.players[p.player_id]) {
+                            gameState.players[p.player_id] = p;
                         }
-                    }
+                    });
+                    updatePlayerListUI();
+                    checkHostAndReadyStatus();
+
                     for (const id in presenceState) {
                         if (id !== myPlayerId) {
                             const pres = presenceState[id][0];
@@ -588,15 +659,58 @@
                         const videoElement = document.getElementById(`video-${p.player_id}`);
                         if (videoElement) videoElement.remove();
                     });
+                    updatePlayerListUI();
+                    checkHostAndReadyStatus();
                 })
                 .subscribe(async (status) => {
                     if (status === 'SUBSCRIBED') {
-                        await gameChannel.track({ player_id: myPlayerId, username: gameState.players[myPlayerId].username });
-                        broadcastPlayerState();
+                        await gameChannel.track(gameState.players[myPlayerId]);
                     }
                 });
         }
         
+        function updatePlayerListUI() {
+            if (gameState.gamePhase !== 'lobby') return;
+            playerList.innerHTML = '';
+            Object.values(gameState.players).forEach(player => {
+                const playerEl = document.createElement('div');
+                playerEl.className = 'flex items-center justify-between p-2 bg-gray-600 rounded';
+                playerEl.innerHTML = `
+                    <div class="flex items-center">
+                        <canvas class="w-8 h-8 mr-2" data-sprite="${player.spriteStyle}"></canvas>
+                        <span>${player.username} ${player.isHost ? '(Host)' : ''}</span>
+                    </div>
+                    <span class="text-2xl">${player.isReady ? '✅' : '❌'}</span>
+                `;
+                playerList.appendChild(playerEl);
+                const playerCanvas = playerEl.querySelector('canvas');
+                const pctx = playerCanvas.getContext('2d');
+                const spriteInfo = sprites[player.spriteStyle];
+                if(spriteInfo && assets.chars.complete) {
+                    pctx.imageSmoothingEnabled = false;
+                    pctx.drawImage(assets.chars, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, 32, 32);
+                }
+            });
+        }
+
+        function checkHostAndReadyStatus() {
+            const presences = Object.keys(gameChannel.presenceState()).sort();
+            if (presences.length > 0) {
+                const hostId = gameChannel.presenceState()[presences[0]][0].player_id;
+                Object.values(gameState.players).forEach(p => p.isHost = p.id === hostId);
+            }
+
+            const me = gameState.players[myPlayerId];
+            if (me && me.isHost) {
+                startGameBtn.style.display = 'block';
+                const allReady = Object.values(gameState.players).every(p => p.isReady);
+                startGameBtn.disabled = !allReady;
+            } else {
+                startGameBtn.style.display = 'none';
+            }
+             updatePlayerListUI();
+        }
+
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastClueCollected(clueId, teamId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_update', payload: { clueId, teamId } }); }
         function broadcastWeaponSpawn(teamId, x, y, level) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'weapon_spawn', payload: { teamId, x, y, level } }); }
