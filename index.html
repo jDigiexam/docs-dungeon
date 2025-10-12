@@ -14,6 +14,9 @@
 </head>
 <body class="bg-gray-900 text-white overflow-hidden h-screen flex flex-col md:flex-row items-stretch">
 
+    <audio id="lobby-music" loop src="assets/dungeon lobby.mp3"></audio>
+    <audio id="dungeon-music" loop src="assets/the mysterious dungeon.mp3"></audio>
+
     <div id="ui-panel" class="w-full md:w-72 lg:w-96 bg-gray-800 p-2 md:p-4 flex flex-col space-y-2 order-last md:order-first h-48 md:h-full overflow-y-auto">
         <div id="game-status-panel" class="bg-gray-900/50 p-2 rounded hidden">
             <div id="status-text" class="text-lg">Status: Alive</div>
@@ -262,6 +265,12 @@
         }
 
         joinGameBtn.addEventListener('click', () => {
+            const lobbyMusic = document.getElementById('lobby-music');
+            lobbyMusic.volume = 0.3; 
+            if (lobbyMusic.paused) {
+                lobbyMusic.play().catch(e => console.error("Lobby music failed to play:", e));
+            }
+
             const username = usernameInput.value.trim();
             if (!username) { usernameInput.style.borderColor = 'red'; return; }
             myPlayerId = `player_${Date.now()}`;
@@ -359,6 +368,16 @@
 
         function startGame(initialState) {
             if (!initialState) { console.error("Game cannot start without initial state!"); return; }
+            
+            const lobbyMusic = document.getElementById('lobby-music');
+            const dungeonMusic = document.getElementById('dungeon-music');
+            lobbyMusic.pause();
+            lobbyMusic.currentTime = 0;
+            dungeonMusic.volume = 0.4;
+            if (dungeonMusic.paused) {
+                dungeonMusic.play().catch(e => console.error("Dungeon music failed to play:", e));
+            }
+
             gameState.gamePhase = 'playing';
             gameState.players = initialState.players;
             gameState.levels = initialState.levels;
@@ -393,45 +412,46 @@
             }
         }
         
-                   function gameLoop(timestamp) {
-                if (!lastTime) lastTime = timestamp;
-                const deltaTime = (timestamp - lastTime) / 1000;
-                lastTime = timestamp;
-            
-                if (gameState.players[myPlayerId]?.isHost) {
-                    checkDeathTimers();
-                }
-            
-                if (gameState.gamePhase !== 'playing') {
-                    requestAnimationFrame(gameLoop);
-                    return;
-                }
-                
-                const myPlayer = gameState.players[myPlayerId];
-            
-                if (!myPlayer || myPlayer.status === 'dead') {
-                    drawGame(); 
-                    requestAnimationFrame(gameLoop);
-                    return;
-                }
-                
-                // Check for clue collection first
-                checkClueCollection();
-            
-                // Update UI based on role
-                if (myPlayer.isMonster) {
-                    updateMonsterUI();
-                } else {
-                    updateClueCounter(); 
-                }
-                
-                updateMyPlayerPosition(deltaTime);
-                checkPlayerCollisions();
-                checkResurrection();
-                checkStairsUse();
-                drawGame();
-                requestAnimationFrame(gameLoop);
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            if (gameState.players[myPlayerId]?.isHost) {
+                checkDeathTimers();
             }
+
+            if (gameState.gamePhase !== 'playing') {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            if (gameState.players[myPlayerId]?.isHost) {
+                updateNpcs(deltaTime);
+                if(gameChannel) gameChannel.send({type: 'broadcast', event: 'npcs_update', payload: gameState.npcs});
+            }
+
+            const myPlayer = gameState.players[myPlayerId];
+            if (!myPlayer || myPlayer.status === 'dead') {
+                drawGame(); 
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            if (myPlayer.isMonster) {
+                updateMonsterUI();
+            } else {
+                updateClueCounter(); 
+            }
+            
+            updateMyPlayerPosition(deltaTime);
+            checkClueCollection();
+            checkPlayerCollisions();
+            checkResurrection();
+            checkStairsUse();
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
 
         // --- 3. DRAWING & RENDERING ---
         function drawGame() {
@@ -611,6 +631,7 @@
         }
 
         // --- 4. SUPABASE REALTIME ---
+        // ... (This section is unchanged, but included for completeness)
         async function setupSupabaseChannels() {
             const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
@@ -882,7 +903,7 @@
             const p = gameState.players[myPlayerId];
             if(!p || !gameState.clues || p.isMonster) return;
             const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);updateClueCounter();}}); 
+            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);}}); 
         }
 
         function checkPlayerCollisions() { 
@@ -912,22 +933,15 @@
                 broadcastPlayerState();
             }
         }
-        // --- NEW FUNCTION ---
+
         function updateMonsterUI() {
             if (!gameState.clues) return;
-        
-            // Find the maximum number of chests collected by any single hunter
             let maxChests = 0;
             const hunters = Object.values(gameState.players).filter(p => !p.isMonster);
-            
             hunters.forEach(hunter => {
                 const hunterChestCount = gameState.clues.filter(c => c.collectedByTeams.includes(hunter.id)).length;
-                if (hunterChestCount > maxChests) {
-                    maxChests = hunterChestCount;
-                }
+                if (hunterChestCount > maxChests) maxChests = hunterChestCount;
             });
-        
-            // Update the monster's UI text
             cluesText.textContent = `Threat Level: ${maxChests}/${NUM_CLUES}`;
             statusText.textContent = 'Status: Hunting';
         }
@@ -947,6 +961,7 @@
         function updateMediaButtons() { micOnIcon.classList.toggle('hidden',!isMicOn);micOffIcon.classList.toggle('hidden',isMicOn);toggleMicBtn.classList.toggle('bg-green-600',isMicOn);toggleMicBtn.classList.toggle('bg-red-600',!isMicOn);camOnIcon.classList.toggle('hidden',!isCamOn);camOffIcon.classList.toggle('hidden',isCamOn);toggleCamBtn.classList.toggle('bg-green-600',isCamOn);toggleCamBtn.classList.toggle('bg-red-600',!isCamOn); }
         toggleMicBtn.addEventListener('click', () => { isMicOn=!isMicOn; if(localStream)localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);updateMediaButtons(); });
         toggleCamBtn.addEventListener('click', () => { isCamOn=!isCamOn; if(localStream)localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);updateMediaButtons(); });
+        
         function createVideoElement(playerId, stream, username, isMuted = false) {
             let videoContainer = document.getElementById(`video-container-${playerId}`);
             if (videoContainer) return;
@@ -954,9 +969,7 @@
             videoContainer.id = `video-container-${playerId}`;
             videoContainer.className = 'relative bg-gray-700 rounded-md overflow-hidden';
             const videoElement = document.createElement('video');
-            videoElement.autoplay = true; 
-            videoElement.playsInline = true;
-            videoElement.muted = isMuted;
+            videoElement.autoplay = true; videoElement.playsInline = true; videoElement.muted = isMuted;
             videoElement.className = 'w-full h-full object-cover';
             videoElement.srcObject = stream;
             const nameOverlay = document.createElement('div');
@@ -965,16 +978,21 @@
             videoContainer.append(videoElement, nameOverlay);
             videoStreamsContainer.appendChild(videoContainer);
         }
+
         function updateVideoGridLayout() {
             const count = Object.keys(gameState.players).length;
-            videoStreamsContainer.className = 'gap-1 flex-grow'; // Reset classes
-            if (count <= 2) {
-                videoStreamsContainer.classList.add('grid', 'grid-cols-2');
+            videoStreamsContainer.className = 'grid gap-1 flex-grow';
+            if (count <= 1) {
+                videoStreamsContainer.classList.add('grid-cols-1');
+            } else if (count === 2) {
+                videoStreamsContainer.classList.add('grid-cols-2');
             } else {
-                videoStreamsContainer.classList.add('grid', 'grid-cols-2', 'grid-rows-2');
+                videoStreamsContainer.classList.add('grid-cols-2', 'grid-rows-2');
             }
         }
+        
         function sendRtcSignal(to, data) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'webrtc_signal', payload: { from: myPlayerId, to, data } }); }
+        
         function createPeerConnection(peerId, isInitiator) { 
             if(peerConnections[peerId]||!localStream)return;
             peerConnections[peerId]=new RTCPeerConnection(peerConnectionConfig);
@@ -993,6 +1011,7 @@
             if (data.sdp) { pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => { if (data.sdp.type === 'offer') { pc.createAnswer().then(a => pc.setLocalDescription(a)).then(() => sendRtcSignal(from, { sdp: pc.localDescription })); } }); } 
             else if (data.ice) { pc.addIceCandidate(new RTCIceCandidate(data.ice)); } 
         }
+        
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && chatInput.value.trim() !== '') {
                 if (!gameChannel) return;
@@ -1007,6 +1026,7 @@
                 chatInput.value = '';
             }
         });
+
         function displayChatMessage({ username, text, color }) { 
             const msgEl = document.createElement('p'); 
             msgEl.classList.add('mb-1'); 
