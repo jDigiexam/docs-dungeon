@@ -101,6 +101,7 @@
 
         <!-- Game Screen --><div id="game-screen" class="relative w-full h-full">
             <canvas id="game-canvas" class="w-full h-full"></canvas>
+            <canvas id="minimap-canvas" class="absolute top-4 right-4 border-2 border-gray-500 bg-black/50" width="200" height="160"></canvas>
 
             <!-- Virtual Joystick for Mobile --><div id="joystick-container" class="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-gray-500/30 flex items-center justify-center select-none md:hidden">
                 <div id="joystick-thumb" class="w-16 h-16 rounded-full bg-gray-400/50"></div>
@@ -118,6 +119,8 @@
         // DOM Elements
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
         const loadingScreen = document.getElementById('loading-screen');
         const lobbyScreen = document.getElementById('lobby-screen');
         const joinGameBtn = document.getElementById('join-game-btn');
@@ -343,6 +346,7 @@
             ctx.restore();
             
             drawFogOfWar();
+            drawMinimap();
         }
         
         function drawFogOfWar() {
@@ -443,6 +447,37 @@
             if (gameState.weapon.spawnedForTeam !== myTeamId || gameState.weapon.level !== levelId) return;
 
             ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, gameState.weapon.x * TILE_SIZE, gameState.weapon.y * TILE_SIZE, TILE_SIZE * 1.5, TILE_SIZE * 1.5);
+        }
+
+        function drawMinimap() {
+            const me = gameState.players[myPlayerId];
+            const level = gameState.levels[me.level];
+            if (!me || !level) return;
+
+            minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            minimapCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+            const tileWidth = minimapCanvas.width / MAP_WIDTH;
+            const tileHeight = minimapCanvas.height / MAP_HEIGHT;
+
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    const tile = level.grid[y][x];
+                    if (tile.type !== 'WALL') {
+                        minimapCtx.fillStyle = tile.type === 'STAIRS' ? '#8b5cf6' : '#1f2937';
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                    }
+                }
+            }
+
+            const playerMapX = (me.x / TILE_SIZE) * tileWidth;
+            const playerMapY = (me.y / TILE_SIZE) * tileHeight;
+
+            minimapCtx.fillStyle = 'yellow';
+            minimapCtx.beginPath();
+            minimapCtx.arc(playerMapX, playerMapY, 2, 0, Math.PI * 2);
+            minimapCtx.fill();
         }
 
         // --- 4. SUPABASE REALTIME ---
@@ -1000,3 +1035,4 @@
     </script>
 </body>
 </html>
+
