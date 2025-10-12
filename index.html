@@ -663,7 +663,13 @@
                     gameOverScreen.style.display = 'flex';
                     if (gameChannel) gameChannel.unsubscribe();
                 })
-                .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
+                .on('broadcast', { event: 'chat_message' }, ({ payload }) => 
+                 if (payload.senderId === myPlayerId) {
+        return; // Do nothing, because we already displayed it locally
+    }
+    displayChatMessage(payload);
+})
+
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
@@ -967,7 +973,22 @@
             if(isInitiator){peerConnections[peerId].createOffer().then(o=>peerConnections[peerId].setLocalDescription(o)).then(()=>sendRtcSignal(peerId,{sdp:peerConnections[peerId].localDescription}));}
         }
         function handleRtcSignal({ from, to, data }) { if (to !== myPlayerId) return; let pc = peerConnections[from]; if (!pc) { createPeerConnection(from, false); pc = peerConnections[from]; } if (data.sdp) { pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => { if (data.sdp.type === 'offer') { pc.createAnswer().then(a => pc.setLocalDescription(a)).then(() => sendRtcSignal(from, { sdp: pc.localDescription })); } }); } else if (data.ice) { pc.addIceCandidate(new RTCIceCandidate(data.ice)); } }
-        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && chatInput.value.trim() !== '') { if (!gameChannel) return; const msg = { username: gameState.players[myPlayerId]?.username || 'Player', text: chatInput.value.trim(), color: '#FFFFFF' }; gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: msg }); displayChatMessage(msg); chatInput.value = ''; } });
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+        if (!gameChannel) return;
+
+        const message = { 
+            username: gameState.players[myPlayerId]?.username || 'Player', 
+            text: chatInput.value.trim(), 
+            color: '#FFFFFF',
+            senderId: myPlayerId // This line is added
+        };
+
+        gameChannel.send({ type: 'broadcast', event: 'chat_message', payload: message });
+        displayChatMessage(message);
+        chatInput.value = '';
+    }
+});
         function displayChatMessage({ username, text, color }) { const msgEl = document.createElement('p'); msgEl.classList.add('mb-1'); const userSpan = document.createElement('span'); userSpan.textContent = `${username}: `; userSpan.style.fontWeight = 'bold'; userSpan.style.color = color; msgEl.appendChild(userSpan); msgEl.append(document.createTextNode(text)); chatMessages.appendChild(msgEl); chatBox.scrollTop = chatBox.scrollHeight; }
     </script>
 </body>
