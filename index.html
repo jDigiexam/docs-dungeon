@@ -464,19 +464,25 @@
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 for (let x = 0; x < MAP_WIDTH; x++) {
                     const tile = level.grid[y][x];
-                    if (tile.type !== 'WALL') {
-                        minimapCtx.fillStyle = tile.type === 'STAIRS' ? '#8b5cf6' : '#1f2937';
+                    if (tile.type.startsWith('WALL')) {
+                        minimapCtx.fillStyle = '#6b7280';
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                    } else if (tile.type === 'FLOOR') {
+                        minimapCtx.fillStyle = '#1f2937';
+                        minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                    } else if (tile.type === 'STAIRS') {
+                        minimapCtx.fillStyle = '#8b5cf6';
                         minimapCtx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
                     }
                 }
             }
 
-            const playerMapX = (me.x / TILE_SIZE) * tileWidth;
-            const playerMapY = (me.y / TILE_SIZE) * tileHeight;
+            const playerMapX = (me.x / (MAP_WIDTH * TILE_SIZE)) * minimapCanvas.width;
+            const playerMapY = (me.y / (MAP_HEIGHT * TILE_SIZE)) * minimapCanvas.height;
 
             minimapCtx.fillStyle = 'yellow';
             minimapCtx.beginPath();
-            minimapCtx.arc(playerMapX, playerMapY, 2, 0, Math.PI * 2);
+            minimapCtx.arc(playerMapX, playerMapY, 3, 0, Math.PI * 2);
             minimapCtx.fill();
         }
 
