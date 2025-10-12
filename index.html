@@ -8,7 +8,7 @@
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; }
-        #game-canvas, #lobby-preview-canvas { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
+        #game-canvas, #lobby-preview-canvas, .char-option { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
         input:focus, button:focus, select:focus { outline: 2px solid #4f46e5; outline-offset: 2px; }
     </style>
 </head>
@@ -70,21 +70,14 @@
 
         <div id="char-creation-screen" class="absolute inset-0 bg-gray-800 flex items-center justify-center z-40 hidden">
              <div class="text-center p-8 bg-gray-700 rounded-lg shadow-xl w-11/12 max-w-md">
-                <h2 class="text-2xl mb-4">Choose Your Hero</h2>
+                <h2 class="text-2xl mb-4">Character Customization</h2>
                 
-                <canvas id="lobby-preview-canvas" width="128" height="128" class="bg-gray-800 mx-auto mb-4 rounded"></canvas>
+                <canvas id="lobby-preview-canvas" width="128" height="128" class="bg-gray-800 mx-auto mb-4 rounded-lg border-2 border-gray-600"></canvas>
         
                 <div class="mb-4">
-                    <label for="sprite-style-select" class="block text-sm font-medium">Class:</label>
-                    <select id="sprite-style-select" class="w-full bg-gray-600 border border-gray-500 rounded p-1 text-sm text-white">
-                        <option value="red_wizard">Red Wizard</option>
-                        <option value="blue_wizard">Blue Wizard</option>
-                        <option value="green_wizard">Green Wizard</option>
-                        <option value="yellow_wizard">Yellow Wizard</option>
-                        <option value="silver_knight">Silver Knight</option>
-                        <option value="dark_knight">Dark Knight</option>
-                        <option value="ranger">Ranger</option>
-                    </select>
+                    <label class="block text-sm font-medium mb-2">Choose your Hero:</label>
+                    <div id="character-grid" class="grid grid-cols-5 sm:grid-cols-6 gap-2 bg-gray-900/50 p-2 rounded-lg max-h-48 overflow-y-auto">
+                        </div>
                 </div>
                 
                 <input id="username-input" type="text" placeholder="Enter your name" class="text-black p-2 rounded w-full mb-4">
@@ -94,8 +87,7 @@
 
         <div id="ready-room-screen" class="absolute inset-0 bg-gray-800 flex flex-col items-center justify-center z-30 hidden p-8">
             <h2 class="text-3xl mb-6">Game Lobby</h2>
-            <div id="player-list" class="w-full max-w-lg bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
-            </div>
+            <div id="player-list" class="w-full max-w-lg bg-gray-700 rounded-lg p-4 mb-6 space-y-2"></div>
             <div class="flex space-x-4">
                 <button id="ready-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded text-xl">Ready Up</button>
                 <button id="start-game-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden disabled:opacity-50" disabled>Start Game</button>
@@ -110,7 +102,6 @@
         <div id="game-screen" class="relative w-full h-full hidden">
             <canvas id="game-canvas" class="w-full h-full"></canvas>
             <canvas id="minimap-canvas" class="absolute top-4 right-4 border-2 border-gray-500 bg-black/50" width="200" height="160"></canvas>
-
             <div id="joystick-container" class="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-gray-500/30 flex items-center justify-center select-none md:hidden">
                 <div id="joystick-thumb" class="w-16 h-16 rounded-full bg-gray-400/50"></div>
             </div>
@@ -157,18 +148,18 @@
         const gameOverText = document.getElementById('game-over-text');
         const gameOverSubtext = document.getElementById('game-over-subtext');
         const lobbyPreviewCanvas = document.getElementById('lobby-preview-canvas');
-        const spriteStyleSelect = document.getElementById('sprite-style-select');
+        const characterGrid = document.getElementById('character-grid');
 
         // Game State
         const gameState = { 
             players: {}, 
             levels: {},
             clues: [],
-            weapon: { id: 'weapon', x: -1, y: -1, level: null, spawnedForTeam: null },
-            gamePhase: 'loading' // loading, lobby, playing
+            gamePhase: 'loading'
         };
         let myPlayerId = null;
         let gameChannel = null;
+        let selectedSpriteKey = 'red_wizard';
         
         // Game Constants
         const TILE_SIZE = 128;
@@ -201,24 +192,36 @@
             STAIRS: [4, 1],
         };
 
-const sprites = {
-    red_wizard:    {sx: 0, sy: 0},
-    blue_wizard:   {sx: 2*SPRITE_SIZE, sy: 0},
-    green_wizard:  {sx: 3*SPRITE_SIZE, sy: 0}, // FIXED
-    yellow_wizard: {sx: 3*SPRITE_SIZE, sy: 2*SPRITE_SIZE},
-    dark_knight:   {sx: 1*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-    silver_knight: {sx: 2*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-    rogue:         {sx: 3*SPRITE_SIZE, sy: 3*SPRITE_SIZE}, 
-    ranger:        {sx: 2*SPRITE_SIZE, sy: 4*SPRITE_SIZE}
-};
+        const sprites = {
+            red_wizard:      {sx: 0, sy: 0, name: "Red Wizard"},
+            orange_wizard:   {sx: 128, sy: 0, name: "Orange Wizard"},
+            blue_wizard:     {sx: 256, sy: 0, name: "Blue Wizard"},
+            green_wizard:    {sx: 384, sy: 0, name: "Green Wizard"},
+            dark_wizard:     {sx: 0,   sy: 128, name: "Dark Wizard"},
+            pink_wizard:     {sx: 128, sy: 128, name: "Pink Wizard"},
+            grey_wizard:     {sx: 256, sy: 128, name: "Grey Wizard"},
+            fire_wizard:     {sx: 384, sy: 128, name: "Fire Wizard"},
+            lime_wizard:     {sx: 0,   sy: 256, name: "Lime Wizard"},
+            sky_wizard:      {sx: 128, sy: 256, name: "Sky Wizard"},
+            white_wizard:    {sx: 256, sy: 256, name: "White Wizard"},
+            yellow_wizard:   {sx: 384, sy: 256, name: "Yellow Wizard"},
+            brown_wizard:    {sx: 0,   sy: 384, name: "Brown Wizard"},
+            dark_knight:     {sx: 128, sy: 384, name: "Dark Knight"},
+            silver_knight:   {sx: 256, sy: 384, name: "Silver Knight"},
+            horned_knight:   {sx: 384, sy: 384, name: "Horned Knight"},
+            white_knight:    {sx: 0,   sy: 512, name: "White Knight"},
+            villager:        {sx: 128, sy: 512, name: "Villager"},
+            ranger:          {sx: 256, sy: 512, name: "Ranger"},
+        };
+        
         const monsterSprites = [ 
-            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, 
-            {sx: 3*SPRITE_SIZE, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 1*SPRITE_SIZE, sheet: 'monsters'}, {sx: 1*SPRITE_SIZE, sy: 1*SPRITE_SIZE, sheet: 'monsters'},
-            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 1*SPRITE_SIZE, sy: 0, sheet: 'giants'}, {sx: 2*SPRITE_SIZE, sy: 0, sheet: 'giants'}
+            {sx: 0, sy: 0, sheet: 'monsters'}, {sx: 128, sy: 0, sheet: 'monsters'}, {sx: 256, sy: 0, sheet: 'monsters'}, 
+            {sx: 384, sy: 0, sheet: 'monsters'}, {sx: 0, sy: 128, sheet: 'monsters'}, {sx: 128, sy: 128, sheet: 'monsters'},
+            {sx: 0, sy: 0, sheet: 'giants'}, {sx: 128, sy: 0, sheet: 'giants'}, {sx: 256, sy: 0, sheet: 'giants'}
         ];
-        const clueSprite = {sx: 1*SPRITE_SIZE, sy: 0}; 
-        const weaponSprite = {sx: 3*SPRITE_SIZE, sy: 1*SPRITE_SIZE}; 
-        const scenerySprites = [ {sx: 0, sy: 1*SPRITE_SIZE}, {sx: 2*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 4*SPRITE_SIZE, sy: 1*SPRITE_SIZE}, {sx: 0, sy: 2*SPRITE_SIZE}, {sx: 1*SPRITE_SIZE, sy: 2*SPRITE_SIZE} ];
+        const clueSprite = {sx: 128, sy: 0}; 
+        const weaponSprite = {sx: 384, sy: 128}; 
+        const scenerySprites = [ {sx: 0, sy: 128}, {sx: 256, sy: 128}, {sx: 512, sy: 128}, {sx: 0, sy: 256}, {sx: 128, sy: 256} ];
 
         // --- 1. INITIALIZATION ---
         window.onload = () => initGame();
@@ -226,10 +229,11 @@ const sprites = {
 
         function initGame() {
             const assetSources = {
-                tiles: 'assets/Tiles8x.png', chars: 'assets/Chars8x.png', items: 'assets/Items8x.png',
+                tiles: 'assets/Tiles8x.png', chars: 'Chars8x.png', items: 'assets/Items8x.png',
                 monsters: 'assets/Monsters8x.png', scenery: 'assets/Scenery8x.png', giants: 'assets/Giants8x.png'
             };
-            let assetsToLoad = Object.keys(assetSources).length;
+            const assetKeys = Object.keys(assetSources);
+            let assetsToLoad = assetKeys.length;
 
             function assetLoaded() {
                 assetsLoadedCount++;
@@ -240,7 +244,7 @@ const sprites = {
                 }
             }
 
-            for (const key in assetSources) {
+            for (const key of assetKeys) {
                 assets[key].src = assetSources[key];
                 assets[key].onload = assetLoaded;
             }
@@ -249,17 +253,37 @@ const sprites = {
         }
 
         function setupLobby() {
-            spriteStyleSelect.addEventListener('change', drawLobbyPreview);
+            characterGrid.innerHTML = ''; 
+
+            for (const key in sprites) {
+                const sprite = sprites[key];
+                const charCanvas = document.createElement('canvas');
+                charCanvas.width = 64;
+                charCanvas.height = 64;
+                charCanvas.className = 'char-option cursor-pointer rounded-md border-2 border-transparent hover:border-indigo-400 p-1';
+                charCanvas.dataset.spriteKey = key;
+
+                const charCtx = charCanvas.getContext('2d');
+                charCtx.drawImage(assets.chars, sprite.sx, sprite.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, 64, 64);
+                
+                characterGrid.appendChild(charCanvas);
+
+                charCanvas.addEventListener('click', () => {
+                    selectedSpriteKey = key;
+                    drawLobbyPreview();
+                });
+            }
+            
             usernameInput.addEventListener('input', () => {
                 usernameInput.style.borderColor = '';
             });
+
             drawLobbyPreview();
         }
 
         function drawLobbyPreview() {
             const previewCtx = lobbyPreviewCanvas.getContext('2d');
-            const style = spriteStyleSelect.value;
-            const spriteInfo = sprites[style];
+            const spriteInfo = sprites[selectedSpriteKey];
             
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
             if (spriteInfo && assets.chars.complete) {
@@ -269,6 +293,16 @@ const sprites = {
                      0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height
                  );
             }
+
+            document.querySelectorAll('.char-option').forEach(canvas => {
+                if (canvas.dataset.spriteKey === selectedSpriteKey) {
+                    canvas.classList.remove('border-transparent');
+                    canvas.classList.add('border-indigo-400', 'bg-indigo-900/50');
+                } else {
+                    canvas.classList.add('border-transparent');
+                    canvas.classList.remove('border-indigo-400', 'bg-indigo-900/50');
+                }
+            });
         }
 
         function resizeCanvas() {
@@ -299,7 +333,6 @@ const sprites = {
                 readyBtn.classList.toggle('hover:bg-yellow-400', me.isReady);
                 readyBtn.classList.toggle('bg-green-600', !me.isReady);
                 readyBtn.classList.toggle('hover:bg-green-500', !me.isReady);
-
                 broadcastPlayerState();
                 checkHostAndReadyStatus();
             }
@@ -347,13 +380,12 @@ const sprites = {
             gameState.players[myPlayerId] = {
                 id: myPlayerId, username,
                 isReady: false, isHost: false,
-                spriteStyle: spriteStyleSelect.value,
+                spriteStyle: selectedSpriteKey,
             };
 
             await setupSupabaseChannels();
         }
 
-        // --- FIXED: This is now the ONLY startGame function ---
         function startGame(initialState) {
             if (!initialState) {
                 console.error("Game cannot start without initial state!");
@@ -378,7 +410,6 @@ const sprites = {
             }
             updateMyPlayerPosition();
             checkClueCollection();
-            checkWeaponCollection();
             checkPlayerCollisions();
             checkStairsUse();
             drawGame();
@@ -386,6 +417,7 @@ const sprites = {
         }
 
         // --- 3. DRAWING & RENDERING ---
+        // (This section contains drawing functions like drawGame, drawPlayer, etc. and is unchanged)
         function drawGame() {
             if (!ctx || !myPlayerId || !gameState.players[myPlayerId] || assetsLoadedCount < Object.keys(assets).length || gameState.gamePhase !== 'playing') return;
             const myPlayer = gameState.players[myPlayerId];
@@ -410,7 +442,7 @@ const sprites = {
             drawClues(myPlayer.level);
             
             Object.values(gameState.players).forEach(player => {
-                if (player.level === myPlayer.level) {
+                if (player.status === 'alive' && player.level === myPlayer.level) {
                     drawPlayer(player);
                 }
             });
@@ -448,17 +480,16 @@ const sprites = {
                  spriteInfo = sprites[player.spriteStyle];
                  spritesheet = assets.chars;
             }
-            if (!spriteInfo || !spritesheet) return;
+            if (!spriteInfo || !spritesheet) {
+                console.warn("Could not find sprite for style:", player.spriteStyle);
+                return;
+            };
 
             ctx.save();
             ctx.translate(Math.floor(player.x), Math.floor(player.y));
             
             if (player.direction === 'left') {
                 ctx.scale(-1, 1);
-            }
-
-            if (player.status === 'dead') {
-                ctx.filter = 'grayscale(100%)';
             }
             
             ctx.drawImage(
@@ -599,14 +630,17 @@ const sprites = {
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
 
             gameChannel
-                .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
-                    if (gameState.players[payload.id]) {
+                .on('broadcast', { event: 'player_update' }, ({ payload }) => {
+                    if (!payload || !payload.id || !gameState.players[payload.id]) return;
+                    if (gameState.gamePhase === 'lobby') {
                         gameState.players[payload.id].isReady = payload.isReady;
-                    }
-                    if(gameState.gamePhase === 'lobby') {
                         checkHostAndReadyStatus();
+                    } else if (gameState.gamePhase === 'playing') {
+                        if (payload.id !== myPlayerId) {
+                            Object.assign(gameState.players[payload.id], payload);
+                        }
                     }
-                 })
+                })
                 .on('broadcast', { event: 'init_game_state' }, ({ payload }) => {
                     startGame(payload);
                 })
@@ -629,11 +663,9 @@ const sprites = {
                 })
                 .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
-                
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
                     const newPlayers = {};
-
                     for (const id in presenceState) {
                         const presenceInfo = presenceState[id][0];
                         newPlayers[presenceInfo.id] = {
@@ -641,15 +673,11 @@ const sprites = {
                             ...presenceInfo
                         };
                     }
-
                     if (gameState.players[myPlayerId]) {
                         newPlayers[myPlayerId] = gameState.players[myPlayerId];
                     }
-                    
                     gameState.players = newPlayers;
-
                     checkHostAndReadyStatus();
-
                     for (const id in presenceState) {
                         const pres = presenceState[id][0];
                         if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
@@ -677,15 +705,12 @@ const sprites = {
 
         function checkHostAndReadyStatus() {
             if (!gameChannel) return;
-
             const presenceState = gameChannel.presenceState();
             const presences = Object.keys(presenceState).sort();
-
             Object.values(gameState.players).forEach(p => p.isHost = false);
 
             if (presences.length > 0) {
                 const newHostId = presenceState[presences[0]]?.[0]?.id;
-                
                 if (newHostId && gameState.players[newHostId]) {
                     gameState.players[newHostId].isHost = true;
                 }
@@ -699,11 +724,10 @@ const sprites = {
             } else {
                 startGameBtn.style.display = 'none';
             }
-            
             updatePlayerListUI();
         }
         
-        function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: { id: myPlayerId, ...gameState.players[myPlayerId] } }); }
+        function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
 
@@ -716,7 +740,6 @@ const sprites = {
             if (joystickContainer) {
                 joystick.radius = joystickContainer.offsetWidth / 2;
                 const joystickThumb = document.getElementById('joystick-thumb');
-
                 joystickContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joystick.active = true; }, { passive: false });
                 joystickContainer.addEventListener('touchmove', (e) => {
                     if (!joystick.active) return;
@@ -743,7 +766,6 @@ const sprites = {
             const gridX2 = Math.floor((x + playerSize) / TILE_SIZE);
             const gridY1 = Math.floor((y - playerSize) / TILE_SIZE);
             const gridY2 = Math.floor((y + playerSize) / TILE_SIZE);
-
             const check = (gx, gy) => {
                 if (gy < 0 || gy >= MAP_HEIGHT || gx < 0 || gx >= MAP_WIDTH) return true;
                 const tile = levelGrid[gy]?.[gx];
@@ -767,25 +789,15 @@ const sprites = {
                 const moveX = (dx / mag) * moveSpeed;
                 const moveY = (dy / mag) * moveSpeed;
                 
-                if (Math.abs(moveX) > 0.1) {
-                    player.direction = moveX > 0 ? 'right' : 'left';
-                }
+                if (Math.abs(moveX) > 0.1) player.direction = moveX > 0 ? 'right' : 'left';
 
                 let moved = false;
-                
-                let newX = player.x + moveX;
-                let newY = player.y;
-
-                if (!isColliding(newX, newY, currentLevel.grid)) {
-                    player.x = newX;
+                if (!isColliding(player.x + moveX, player.y, currentLevel.grid)) {
+                    player.x += moveX;
                     moved = true;
                 }
-
-                newX = player.x;
-                newY = player.y + moveY;
-
-                if (!isColliding(player.x, newY, currentLevel.grid)) {
-                    player.y = newY;
+                if (!isColliding(player.x, player.y + moveY, currentLevel.grid)) {
+                    player.y += moveY;
                     moved = true;
                 }
 
@@ -794,68 +806,53 @@ const sprites = {
         }
         
         // --- 6. GAME MECHANICS ---
-function generateLevels() {
-    const levels = {};
-    const levelNames = ['A', 'B', 'C'];
+        function generateLevels() {
+            const levels = {};
+            const levelNames = ['A', 'B', 'C'];
+            const levelData = {
+                A: { rooms: [ {x:5, y:5, w:10, h:8}, {x:20, y:8, w:10, h:10}, {x:40, y:5, w:15, h:10}, {x:45, y:20, w:10, h:10}, {x:5, y:25, w:15, h:15}, {x:30, y:35, w:15, h:10}, {x:25, y:20, w:10, h:10} ] },
+                B: { rooms: [ {x:2, y:40, w:15, h:8}, {x:22, y:30, w:11, h:9}, {x:38, y:40, w:10, h:8}, {x:5, y:5, w:12, h:10}, {x:25, y:18, w:12, h:8}, {x:42, y:5, w:15, h:10}, {x:45, y:25, w:10, h:10} ] },
+                C: { rooms: [ {x:2, y:2, w:12, h:12}, {x:40, y:5, w:15, h:10}, {x:35, y:35, w:15, h:11}, {x:4, y:30, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10}, {x:48, y:30, w:10, h:8} ] }
+            };
 
-    // --- FIXED DATA: All room coordinates are now within the 60x50 map boundaries ---
-    const levelData = {
-        A: { rooms: [ {x:5, y:5, w:10, h:8}, {x:20, y:8, w:10, h:10}, {x:40, y:5, w:15, h:10}, {x:45, y:20, w:10, h:10}, {x:5, y:25, w:15, h:15}, {x:30, y:35, w:15, h:10}, {x:25, y:20, w:10, h:10} ] },
-        B: { rooms: [ {x:2, y:40, w:15, h:8}, {x:22, y:30, w:11, h:9}, {x:38, y:40, w:10, h:8}, {x:5, y:5, w:12, h:10}, {x:25, y:18, w:12, h:8}, {x:42, y:5, w:15, h:10}, {x:45, y:25, w:10, h:10} ] },
-        C: { rooms: [ {x:2, y:2, w:12, h:12}, {x:40, y:5, w:15, h:10}, {x:35, y:35, w:15, h:11}, {x:4, y:30, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10}, {x:48, y:30, w:10, h:8} ] }
-    };
+            levelNames.forEach(levelId => {
+                const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
+                const { rooms } = levelData[levelId];
 
-    levelNames.forEach(levelId => {
-        const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
-        const { rooms } = levelData[levelId];
-
-        rooms.forEach(room => {
-            for (let ry = room.y; ry < room.y + room.h; ry++) {
-                for (let rx = room.x; rx < room.x + room.w; rx++) {
-                    const floorVar = tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)];
-                    if (grid[ry]?.[rx]) grid[ry][rx] = { type: 'FLOOR', floorVariant: floorVar };
+                rooms.forEach(room => {
+                    for (let ry = room.y; ry < room.y + room.h; ry++) {
+                        for (let rx = room.x; rx < room.x + room.w; rx++) {
+                            const floorVar = tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)];
+                            if (grid[ry]?.[rx]) grid[ry][rx] = { type: 'FLOOR', floorVariant: floorVar };
+                        }
+                    }
+                });
+                for(let i = 0; i < rooms.length - 1; i++) {
+                    const roomA = rooms[i]; const roomB = rooms[i+1];
+                    const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
+                    const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
+                    const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+                    for(let x = h_start; x <= h_end; x++) for(let dy = -1; dy <= 1; dy++) if (grid[start.y + dy]?.[x]) grid[start.y + dy][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
+                    const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+                    for(let y = v_start; y <= v_end; y++) for(let dx = -1; dx <= 1; dx++) if (grid[y]?.[end.x + dx]) grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
                 }
-            }
-        });
+                levels[levelId] = { grid, rooms };
+            });
 
-        for(let i = 0; i < rooms.length - 1; i++) {
-            const roomA = rooms[i]; const roomB = rooms[i+1];
-            const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
-            const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
-            
-            const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
-            for(let x = h_start; x <= h_end; x++) {
-                for(let dy = -1; dy <= 1; dy++) {
-                     if (grid[start.y + dy]?.[x]) grid[start.y + dy][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
-                }
+            for (let i = 0; i < levelNames.length; i++) {
+                const levelIdA = levelNames[i];
+                const levelIdB = levelNames[(i + 1) % levelNames.length];
+                const roomA = levels[levelIdA].rooms[Math.floor(Math.random() * levels[levelIdA].rooms.length)];
+                const xA = roomA.x + 1 + Math.floor(Math.random() * (roomA.w - 2));
+                const yA = roomA.y + 1 + Math.floor(Math.random() * (roomA.h - 2));
+                levels[levelIdA].grid[yA][xA] = { type: 'STAIRS', targetLevel: levelIdB };
+                const roomB = levels[levelIdB].rooms[Math.floor(Math.random() * levels[levelIdB].rooms.length)];
+                const xB = roomB.x + 1 + Math.floor(Math.random() * (roomB.w - 2));
+                const yB = roomB.y + 1 + Math.floor(Math.random() * (roomB.h - 2));
+                levels[levelIdB].grid[yB][xB] = { type: 'STAIRS', targetLevel: levelIdA };
             }
-            const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
-            for(let y = v_start; y <= v_end; y++) {
-                for(let dx = -1; dx <= 1; dx++) {
-                    if (grid[y]?.[end.x + dx]) grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
-                }
-            }
+            return levels;
         }
-        levels[levelId] = { grid, rooms };
-    });
-
-    // Place paired stairs between levels
-    for (let i = 0; i < levelNames.length; i++) {
-        const levelIdA = levelNames[i];
-        const levelIdB = levelNames[(i + 1) % levelNames.length];
-        
-        const roomA = levels[levelIdA].rooms[Math.floor(Math.random() * levels[levelIdA].rooms.length)];
-        const xA = roomA.x + 1 + Math.floor(Math.random() * (roomA.w - 2));
-        const yA = roomA.y + 1 + Math.floor(Math.random() * (roomA.h - 2));
-        levels[levelIdA].grid[yA][xA] = { type: 'STAIRS', targetLevel: levelIdB };
-
-        const roomB = levels[levelIdB].rooms[Math.floor(Math.random() * levels[levelIdB].rooms.length)];
-        const xB = roomB.x + 1 + Math.floor(Math.random() * (roomB.w - 2));
-        const yB = roomB.y + 1 + Math.floor(Math.random() * (roomB.h - 2));
-        levels[levelIdB].grid[yB][xB] = { type: 'STAIRS', targetLevel: levelIdA };
-    }
-    return levels;
-}
 
         function placeClues(levels, numClues, minDistance, playerStartPos) {
             let clues = [];
@@ -872,38 +869,28 @@ function generateLevels() {
                     }
                 });
             }
-
             for (let i = allPossibleLocations.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [allPossibleLocations[i], allPossibleLocations[j]] = [allPossibleLocations[j], allPossibleLocations[i]]; }
-            
             while (clues.length < numClues && allPossibleLocations.length > 0) {
                 let loc = allPossibleLocations.pop();
-                let tooCloseOnSameLevel = clues.some(clue => clue.level === loc.level && Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
-                if (!tooCloseOnSameLevel) {
-                    clues.push({ 
-                        id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: []
-                    });
-                }
+                let tooClose = clues.some(clue => clue.level === loc.level && Math.sqrt((clue.x - loc.x)**2 + (clue.y - loc.y)**2) < minDistance);
+                if (!tooClose) clues.push({ id: `clue_${clues.length}`, x: loc.x, y: loc.y, level: loc.level, collectedByTeams: [] });
             }
             return clues;
         }
         
         function checkClueCollection() {
             const player = gameState.players[myPlayerId]; if(!player || !gameState.clues) return;
-            const playerCellX = Math.floor(player.x / TILE_SIZE); const playerCellY = Math.floor(player.y / TILE_SIZE);
-            gameState.clues.forEach(clue => { if (clue.level === player.level && clue.x === playerCellX && clue.y === playerCellY && clue.collectedByTeams.length === 0) { clue.collectedByTeams.push('team1'); updateClueCounter(); } });
+            const px = Math.floor(player.x / TILE_SIZE); const py = Math.floor(player.y / TILE_SIZE);
+            gameState.clues.forEach(clue => { if (clue.level === player.level && clue.x === px && clue.y === py && clue.collectedByTeams.length === 0) { clue.collectedByTeams.push('team1'); updateClueCounter(); } });
         }
-        
-        function checkWeaponCollection() { /* Simplified */ }
         
         function checkPlayerCollisions() {
             const me = gameState.players[myPlayerId];
             if (!me || me.status !== 'alive') return;
-            
             for (const otherId in gameState.players) {
                 if (otherId === myPlayerId) continue;
                 const other = gameState.players[otherId];
                 if (other.status !== 'alive' || other.level !== me.level) continue;
-
                 const dist = Math.sqrt((me.x - other.x)**2 + (me.y - other.y)**2);
                 if (dist < TILE_SIZE * 0.7) {
                     if (me.hasWeapon && other.isMonster) broadcastMonsterKilled(me.username);
@@ -916,16 +903,13 @@ function generateLevels() {
             const player = gameState.players[myPlayerId]; if (!player) return;
             const now = Date.now();
             if (player.lastStairsUse && now - player.lastStairsUse < 500) return;
-
-            const playerCellX = Math.floor(player.x / TILE_SIZE);
-            const playerCellY = Math.floor(player.y / TILE_SIZE);
-            const tile = gameState.levels[player.level]?.grid[playerCellY]?.[playerCellX];
+            const px = Math.floor(player.x / TILE_SIZE); const py = Math.floor(player.y / TILE_SIZE);
+            const tile = gameState.levels[player.level]?.grid[py]?.[px];
 
             if (tile && tile.type === 'STAIRS') {
                 player.lastStairsUse = now;
                 const currentLevelId = player.level;
                 player.level = tile.targetLevel;
-                
                 const targetLevelData = gameState.levels[player.level];
                 let foundExit = false;
                 for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -948,8 +932,7 @@ function generateLevels() {
             const collectedCount = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
             cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
             if (collectedCount >= NUM_CLUES && gameState.players[myPlayerId] && !gameState.players[myPlayerId].hasWeapon) {
-                const player = gameState.players[myPlayerId];
-                player.hasWeapon = true;
+                gameState.players[myPlayerId].hasWeapon = true;
                 broadcastPlayerState();
             }
         }
@@ -990,18 +973,14 @@ function generateLevels() {
                     videoContainer = document.createElement('div');
                     videoContainer.id = `video-container-${peerId}`;
                     videoContainer.className = 'w-full h-full relative';
-                    
                     const videoElement = document.createElement('video');
                     videoElement.autoplay = true; videoElement.playsInline = true;
                     videoElement.className = 'w-full h-full object-cover';
                     videoElement.srcObject = event.streams[0];
-
                     const nameOverlay = document.createElement('div');
                     nameOverlay.className = 'absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded';
                     nameOverlay.textContent = gameState.players[peerId]?.username || 'Player';
-                    
-                    videoContainer.appendChild(videoElement);
-                    videoContainer.appendChild(nameOverlay);
+                    videoContainer.append(videoElement, nameOverlay);
                     remoteVideosContainer.appendChild(videoContainer);
                 } else {
                     videoContainer.querySelector('video').srcObject = event.streams[0];
