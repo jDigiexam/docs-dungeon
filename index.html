@@ -650,6 +650,12 @@
                     }
                 })
                 .on('broadcast', { event: 'init_game_state' }, ({ payload }) => startGame(payload))
+                .on('broadcast', { event: 'clue_collected' }, ({ payload }) => {
+                    const clue = gameState.clues.find(c => c.id === payload.clueId);
+                    if (clue && !clue.collectedByTeams.includes(payload.playerId)) {
+                        clue.collectedByTeams.push(payload.playerId);
+                    }
+                })
                 .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
                     const deadPlayer = gameState.players[payload.playerId];
                     if (deadPlayer) {
@@ -749,6 +755,11 @@
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
         function broadcastPlayerResurrected(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_resurrected', payload: { playerId } }); }
         function broadcastForceTurnMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'force_turn_monster', payload: { playerId, monsterSpriteIndex } }); }
+        function broadcastClueCollected(clueId, playerId) {
+            if (gameChannel) {
+                gameChannel.send({ type: 'broadcast', event: 'clue_collected', payload: { clueId, playerId } });
+            }
+        }
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -978,6 +989,20 @@
             });
             cluesText.textContent = `Threat Level: ${maxChests}/${NUM_CLUES}`;
             statusText.textContent = 'Status: Hunting';
+        }
+        function checkClueCollection() { 
+            const p = gameState.players[myPlayerId];
+            if(!p || !gameState.clues || p.isMonster) return;
+            const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
+            
+            gameState.clues.forEach(c => {
+                // Check if the clue is uncollected before broadcasting
+                if(c.level === p.level && c.x === px && c.y === py && c.collectedByTeams.length === 0) {
+                    // Instead of changing state locally, we broadcast the event.
+                    // The handler will update the state for everyone, including us.
+                    broadcastClueCollected(c.id, p.id);
+                }
+            }); 
         }
         
         // --- 7. WEBRTC & 8. CHAT ---
