@@ -806,19 +806,30 @@
             gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push('team1');updateClueCounter();}}); 
         }
 
-        function checkPlayerCollisions() { 
-            const me=gameState.players[myPlayerId];
-            if(!me||me.status!=='alive')return;
-            for(const oId in gameState.players){
-                if(oId===myPlayerId)continue;
-                const o=gameState.players[oId];
-                if(o.status!=='alive'||o.level!==me.level)continue;
-                if(Math.sqrt((me.x-o.x)**2+(me.y-o.y)**2)<TILE_SIZE*0.7){
-                    if(me.hasWeapon&&o.isMonster)broadcastMonsterKilled(me.username);
-                    if(me.isMonster&&!o.hasWeapon)broadcastPlayerKilled(oId);
-                }
+function checkPlayerCollisions() { 
+    const me = gameState.players[myPlayerId];
+    if(!me || me.status !== 'alive') return;
+
+    for(const otherId in gameState.players) {
+        if(otherId === myPlayerId) continue;
+        
+        const other = gameState.players[otherId];
+        if(other.status !== 'alive' || other.level !== me.level) continue;
+
+        const distance = Math.sqrt((me.x - other.x)**2 + (me.y - other.y)**2);
+
+        if(distance < TILE_SIZE * 0.7) {
+            // Hunter kills Monster
+            if (me.hasWeapon && other.isMonster) {
+                broadcastMonsterKilled(me.username);
+            }
+            // --- MODIFIED: Monster can only kill non-monsters ---
+            if (me.isMonster && !other.isMonster) {
+                broadcastPlayerKilled(otherId);
             }
         }
+    }
+}
 
         function checkStairsUse() { 
             const p=gameState.players[myPlayerId];if(!p)return;const now=Date.now();if(p.lastStairsUse&&now-p.lastStairsUse<500)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE),tile=gameState.levels[p.level]?.grid[py]?.[px];if(tile&&tile.type==='STAIRS'){p.lastStairsUse=now;const cId=p.level;p.level=tile.targetLevel;const tL=gameState.levels[p.level];let exit=false;for(let y=0;y<MAP_HEIGHT;y++){for(let x=0;x<MAP_WIDTH;x++){const tT=tL.grid[y]?.[x];if(tT&&tT.type==='STAIRS'&&tT.targetLevel===cId){p.x=(x+0.5)*TILE_SIZE;p.y=(y+0.5)*TILE_SIZE;exit=true;break;}}if(exit)break;}broadcastPlayerState();}}
