@@ -41,8 +41,8 @@
             
             <div class="flex flex-col flex-grow min-h-0 w-1/2 md:w-full">
                  <div id="chat-box" class="flex-grow bg-black/60 rounded-md p-2 overflow-y-auto text-sm mb-2">
-                     <div id="chat-messages"></div>
-                </div>
+                      <div id="chat-messages"></div>
+                 </div>
                 <input id="chat-input" type="text" placeholder="Type a message..." class="w-full bg-gray-700 border-2 border-gray-500 rounded-md p-2 text-sm">
             </div>
         </div>
@@ -642,7 +642,7 @@
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => {
                     if (!payload || !payload.id || !gameState.players[payload.id]) return;
-                    if (gameState.gamePhase === 'lobby') { gameState.players[payload.id].isReady = payload.isReady; checkHostAndReadyStatus(); } 
+                    if (gameState.gamePhase === 'lobby') { Object.assign(gameState.players[payload.id], payload); checkHostAndReadyStatus(); } 
                     else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) Object.assign(gameState.players[payload.id], payload);
                 })
                 .on('broadcast', { event: 'npcs_update' }, ({ payload }) => {
@@ -976,30 +976,72 @@
             }
         }
 
-        function checkStairsUse() { 
-            const p=gameState.players[myPlayerId];if(!p)return;const now=Date.now();if(p.lastStairsUse&&now-p.lastStairsUse<500)return;const px=Math.floor(p.x/TILE_SIZE),py=Math.floor(p.y/TILE_SIZE),tile=gameState.levels[p.level]?.grid[py]?.[px];if(tile&&tile.type==='STAIRS'){p.lastStairsUse=now;const cId=p.level;p.level=tile.targetLevel;const tL=gameState.levels[p.level];let exit=false;for(let y=0;y<MAP_HEIGHT;y++){for(let x=0;x<MAP_WIDTH;x++){const tT=tL.grid[y]?.[x];if(tT&&tT.type==='STAIRS'&&tT.targetLevel===cId){p.x=(x+0.5)*TILE_SIZE;p.y=(y+0.5)*TILE_SIZE;exit=true;break;}}if(exit)break;}broadcastPlayerState();}}
-        
-        function updateClueCounter() { 
-            if(!gameState.clues)return;
-            const myId = gameState.players[myPlayerId]?.id;
-            if (!myId) return;
-            const collectedCount = gameState.clues.filter(c => c.collectedByTeams.includes(myId)).length;
-            cluesText.textContent=`Chests Found: ${collectedCount}/${NUM_CLUES}`;
-            if(collectedCount>=NUM_CLUES&&gameState.players[myPlayerId]&&!gameState.players[myPlayerId].hasWeapon){
-                gameState.players[myPlayerId].hasWeapon=true;
+        // --- FIXED FUNCTION ---
+        function checkStairsUse() {
+            const player = gameState.players[myPlayerId];
+            if (!player) return;
+
+            // Cooldown to prevent rapid level switching
+            const now = Date.now();
+            if (player.lastStairsUse && now - player.lastStairsUse < 500) {
+                return;
+            }
+
+            const playerTileX = Math.floor(player.x / TILE_SIZE);
+            const playerTileY = Math.floor(player.y / TILE_SIZE);
+            const currentTile = gameState.levels[player.level]?.grid[playerTileY]?.[playerTileX];
+
+            if (currentTile && currentTile.type === 'STAIRS') {
+                player.lastStairsUse = now;
+                const currentLevelId = player.level;
+                const targetLevelId = currentTile.targetLevel;
+                player.level = targetLevelId;
+
+                // Find the corresponding exit stairs in the new level
+                const targetLevel = gameState.levels[targetLevelId];
+                let foundExit = false;
+                for (let y = 0; y < MAP_HEIGHT; y++) {
+                    for (let x = 0; x < MAP_WIDTH; x++) {
+                        const targetTile = targetLevel.grid[y]?.[x];
+                        if (targetTile && targetTile.type === 'STAIRS' && targetTile.targetLevel === currentLevelId) {
+                            player.x = (x + 0.5) * TILE_SIZE;
+                            player.y = (y + 0.5) * TILE_SIZE;
+                            foundExit = true;
+                            break;
+                        }
+                    }
+                    if (foundExit) break;
+                }
                 broadcastPlayerState();
             }
         }
         
+        // --- FIXED FUNCTION ---
+        function updateClueCounter() {
+            if (!gameState.clues) return;
+            const me = gameState.players[myPlayerId];
+            if (!me) return;
+
+            // Count total unique clues collected by any hunter
+            const collectedCount = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
+            cluesText.textContent = `Chests Found: ${collectedCount}/${NUM_CLUES}`;
+
+            // Grant weapon to all hunters if the goal is met
+            if (collectedCount >= NUM_CLUES && !me.hasWeapon) {
+                me.hasWeapon = true;
+                // Broadcast your state change so others see your weapon
+                broadcastPlayerState();
+            }
+        }
+        
+        // --- FIXED FUNCTION ---
         function updateMonsterUI() {
             if (!gameState.clues) return;
-            let maxChests = 0;
-            const hunters = Object.values(gameState.players).filter(p => !p.isMonster);
-            hunters.forEach(hunter => {
-                const hunterChestCount = gameState.clues.filter(c => c.collectedByTeams.includes(hunter.id)).length;
-                if (hunterChestCount > maxChests) maxChests = hunterChestCount;
-            });
-            cluesText.textContent = `Threat Level: ${maxChests}/${NUM_CLUES}`;
+            
+            // Calculate total unique chests collected by the hunter team
+            const totalChestsCollected = gameState.clues.filter(c => c.collectedByTeams.length > 0).length;
+
+            cluesText.textContent = `Threat Level: ${totalChestsCollected}/${NUM_CLUES}`;
             statusText.textContent = 'Status: Hunting';
         }
         
