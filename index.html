@@ -755,11 +755,8 @@
         function broadcastMonsterKilled(killerName) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'monster_killed', payload: { killerName } }); }
         function broadcastPlayerResurrected(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_resurrected', payload: { playerId } }); }
         function broadcastForceTurnMonster(playerId, monsterSpriteIndex) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'force_turn_monster', payload: { playerId, monsterSpriteIndex } }); }
-        function broadcastClueCollected(clueId, playerId) {
-            if (gameChannel) {
-                gameChannel.send({ type: 'broadcast', event: 'clue_collected', payload: { clueId, playerId } });
-            }
-        }
+        function broadcastClueCollected(clueId, playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'clue_collected', payload: { clueId, playerId } }); }
+
 
         // --- 5. PLAYER MOVEMENT & CONTROLS ---
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -817,11 +814,9 @@
                 const { rooms } = levelData[levelId];
                 rooms.forEach(room => { for (let y = room.y; y < room.y + room.h; y++) for (let x = room.x; x < room.x + room.w; x++) if (grid[y]?.[x]) grid[y][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)] }; });
                 
-                // Create a main loop
                 for(let i=0; i < rooms.length; i++){
                     connectRooms(rooms[i], rooms[(i + 1) % rooms.length], grid);
                 }
-                // Add some random extra connections
                 for(let i=0; i < 3; i++) {
                     const roomA = rooms[Math.floor(Math.random() * rooms.length)];
                     const roomB = rooms[Math.floor(Math.random() * rooms.length)];
@@ -844,16 +839,15 @@
         function connectRooms(roomA, roomB, grid) {
             const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
             const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
-
-            if (Math.random() > 0.5) { // Horizontal first, then vertical
-                const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+            if (Math.random() > 0.5) {
+                const h_start = Math.min(start.x, end.x), h_end = Math.max(start.x, end.x);
                 for(let x=h_start; x<=h_end; x++) for(let dy=-1; dy<=1; dy++) if(grid[start.y+dy]?.[x]) grid[start.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
-                const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+                const v_start = Math.min(start.y, end.y), v_end = Math.max(start.y, end.y);
                 for(let y=v_start; y<=v_end; y++) for(let dx=-1; dx<=1; dx++) if(grid[y]?.[end.x+dx]) grid[y][end.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
-            } else { // Vertical first, then horizontal
-                const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+            } else {
+                const v_start = Math.min(start.y, end.y), v_end = Math.max(start.y, end.y);
                 for(let y=v_start; y<=v_end; y++) for(let dx=-1; dx<=1; dx++) if(grid[y]?.[start.x+dx]) grid[y][start.x+dx]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
-                const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+                const h_start = Math.min(start.x, end.x), h_end = Math.max(start.x, end.x);
                 for(let x=h_start; x<=h_end; x++) for(let dy=-1; dy<=1; dy++) if(grid[end.y+dy]?.[x]) grid[end.y+dy][x]={type:'FLOOR',floorVariant:tileMap.FLOOR_VARS[0]};
             }
         }
@@ -875,14 +869,8 @@
                 const startRoom = randomLevel.rooms[Math.floor(Math.random() * randomLevel.rooms.length)];
                 const sprite = npcMonsterSprites[Math.floor(Math.random() * npcMonsterSprites.length)];
                 npcs.push({
-                    id: `npc_${i}`,
-                    x: (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE,
-                    y: (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE,
-                    level: randomLevelName,
-                    sprite: sprite,
-                    direction: 'right',
-                    moveTimer: Math.random() * 3,
-                    moveDirection: {x: 0, y: 0}
+                    id: `npc_${i}`, x: (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE, y: (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE,
+                    level: randomLevelName, sprite: sprite, direction: 'right', moveTimer: Math.random() * 3, moveDirection: {x: 0, y: 0}
                 });
             }
             return npcs;
@@ -894,21 +882,15 @@
                 npc.moveTimer -= deltaTime;
                 if (npc.moveTimer <= 0) {
                     const roll = Math.random();
-                    if (roll < 0.25) npc.moveDirection = { x: 1, y: 0 };
-                    else if (roll < 0.5) npc.moveDirection = { x: -1, y: 0 };
-                    else if (roll < 0.75) npc.moveDirection = { x: 0, y: 1 };
-                    else npc.moveDirection = { x: 0, y: -1 };
+                    if (roll < 0.25) npc.moveDirection = { x: 1, y: 0 }; else if (roll < 0.5) npc.moveDirection = { x: -1, y: 0 };
+                    else if (roll < 0.75) npc.moveDirection = { x: 0, y: 1 }; else npc.moveDirection = { x: 0, y: -1 };
                     npc.moveTimer = Math.random() * 3 + 2;
                 }
-                const moveX = npc.moveDirection.x * NPC_SPEED * deltaTime;
-                const moveY = npc.moveDirection.y * NPC_SPEED * deltaTime;
-                if (moveX > 0) npc.direction = 'right';
-                if (moveX < 0) npc.direction = 'left';
-                const targetX = npc.x + moveX;
-                const targetY = npc.y + moveY;
+                const moveX = npc.moveDirection.x * NPC_SPEED * deltaTime; const moveY = npc.moveDirection.y * NPC_SPEED * deltaTime;
+                if (moveX > 0) npc.direction = 'right'; if (moveX < 0) npc.direction = 'left';
+                const targetX = npc.x + moveX; const targetY = npc.y + moveY;
                 if (!isColliding(targetX, targetY, gameState.levels[npc.level].grid)) {
-                    npc.x = targetX;
-                    npc.y = targetY;
+                    npc.x = targetX; npc.y = targetY;
                 } else {
                     npc.moveTimer = 0;
                 }
@@ -947,12 +929,16 @@
             const p = gameState.players[myPlayerId];
             if(!p || !gameState.clues || p.isMonster) return;
             const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){c.collectedByTeams.push(p.id);updateClueCounter();}}); 
+            gameState.clues.forEach(c => {
+                if(c.level===p.level && c.x===px && c.y===py && c.collectedByTeams.length === 0){
+                    broadcastClueCollected(c.id, p.id);
+                }
+            }); 
         }
 
         function checkPlayerCollisions() { 
-            const me=gameState.players[myPlayerId];
-            if(!me||me.status!=='alive')return;
+            const me = gameState.players[myPlayerId];
+            if(!me || me.status !== 'alive') return;
             for(const oId in gameState.players){
                 if(oId === myPlayerId) continue;
                 const o = gameState.players[oId];
@@ -989,20 +975,6 @@
             });
             cluesText.textContent = `Threat Level: ${maxChests}/${NUM_CLUES}`;
             statusText.textContent = 'Status: Hunting';
-        }
-        function checkClueCollection() { 
-            const p = gameState.players[myPlayerId];
-            if(!p || !gameState.clues || p.isMonster) return;
-            const px = Math.floor(p.x/TILE_SIZE), py = Math.floor(p.y/TILE_SIZE);
-            
-            gameState.clues.forEach(c => {
-                // Check if the clue is uncollected before broadcasting
-                if(c.level === p.level && c.x === px && c.y === py && c.collectedByTeams.length === 0) {
-                    // Instead of changing state locally, we broadcast the event.
-                    // The handler will update the state for everyone, including us.
-                    broadcastClueCollected(c.id, p.id);
-                }
-            }); 
         }
         
         // --- 7. WEBRTC & 8. CHAT ---
