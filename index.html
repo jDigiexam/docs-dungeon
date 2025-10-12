@@ -562,6 +562,48 @@
             minimapCtx.fill();
         }
 
+        function updatePlayerListUI() {
+            if (gameState.gamePhase !== 'lobby') return;
+            playerList.innerHTML = '';
+            Object.values(gameState.players).forEach(player => {
+                const playerEl = document.createElement('div');
+                playerEl.className = 'flex items-center justify-between p-2 bg-gray-600 rounded';
+                playerEl.innerHTML = `
+                    <div class="flex items-center">
+                        <canvas class="w-8 h-8 mr-2" data-sprite="${player.spriteStyle}"></canvas>
+                        <span>${player.username} ${player.isHost ? '(Host)' : ''}</span>
+                    </div>
+                    <span class="text-2xl">${player.isReady ? '✅' : '❌'}</span>
+                `;
+                playerList.appendChild(playerEl);
+                const playerCanvas = playerEl.querySelector('canvas');
+                const pctx = playerCanvas.getContext('2d');
+                const spriteInfo = sprites[player.spriteStyle];
+                if(spriteInfo && assets.chars.complete) {
+                    pctx.imageSmoothingEnabled = false;
+                    pctx.drawImage(assets.chars, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, 32, 32);
+                }
+            });
+        }
+
+        function checkHostAndReadyStatus() {
+            const presences = Object.keys(gameChannel.presenceState()).sort();
+            if (presences.length > 0) {
+                const hostId = gameChannel.presenceState()[presences[0]][0].id;
+                Object.values(gameState.players).forEach(p => p.isHost = p.id === hostId);
+            }
+
+            const me = gameState.players[myPlayerId];
+            if (me && me.isHost) {
+                startGameBtn.style.display = 'block';
+                const allReady = Object.values(gameState.players).every(p => p.isReady);
+                startGameBtn.disabled = !allReady;
+            } else {
+                startGameBtn.style.display = 'none';
+            }
+             updatePlayerListUI();
+        }
+
         // --- 4. SUPABASE REALTIME ---
         async function setupSupabaseChannels() {
              const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
@@ -627,30 +669,27 @@
                 .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
                 .on('presence', { event: 'sync' }, () => {
                     const presenceState = gameChannel.presenceState();
-                    const currentPlayersInPresence = {};
-                    Object.values(presenceState).forEach(pArr => {
-                        const p = pArr[0];
-                        currentPlayersInPresence[p.id] = p;
-                    });
-                    
+                    // Clear local players that are no longer in presence
                     for (const id in gameState.players) {
-                        if (!currentPlayersInPresence[id]) {
+                        if (!Object.values(presenceState).some(pArr => pArr[0].id === id)) {
                             delete gameState.players[id];
                         }
                     }
-                     for (const id in currentPlayersInPresence) {
-                        if (!gameState.players[id]) {
-                            gameState.players[id] = currentPlayersInPresence[id];
+                    // Add/update players from presence
+                    Object.values(presenceState).forEach(presenceArr => {
+                        const p = presenceArr[0];
+                        if(!gameState.players[p.id]) {
+                            gameState.players[p.id] = p;
                         }
-                    }
+                    });
                     
                     checkHostAndReadyStatus();
                     updatePlayerListUI();
 
                     for (const id in presenceState) {
-                        if (id !== myPlayerId) {
-                            const pres = presenceState[id][0];
-                             if (!peerConnections[pres.id]) createPeerConnection(pres.id, true);
+                        const pres = presenceState[id][0];
+                        if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
+                           createPeerConnection(pres.id, true);
                         }
                     }
                 })
