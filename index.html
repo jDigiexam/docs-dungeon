@@ -176,10 +176,10 @@
         // Game Constants
         const TILE_SIZE = 128;
         const SPRITE_SIZE = 128;
-        const MAP_WIDTH = 60; 
-        const MAP_HEIGHT = 50;
+        const MAP_WIDTH = 100; 
+        const MAP_HEIGHT = 80;
         const NUM_CLUES = 7;
-        const MIN_CLUE_DISTANCE = 5;
+        const MIN_CLUE_DISTANCE = 10;
         const PLAYER_SPEED = 10; 
         const MONSTER_SPEED = 11;
         const SIGHT_RADIUS = 8;
@@ -338,7 +338,7 @@
             
             // Assign roles and generate level data for all players consistently
             const presences = Object.keys(gameChannel.presenceState()).sort();
-            const monsterId = presences[1] ? gameState.players[presenceState[presences[1]][0].player_id]?.id : null;
+            const monsterId = presences[1] ? gameState.players[presenceState[presences[1]][0].id]?.id : null;
             const monsterSpriteIndex = Math.floor(Math.random() * monsterSprites.length);
 
             Object.values(gameState.players).forEach(p => {
