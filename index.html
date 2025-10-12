@@ -298,25 +298,41 @@
             }
         });
 
-        startGameBtn.addEventListener('click', () => {
-            if (!gameChannel || !gameState.players[myPlayerId]?.isHost) return;
-            const playerIds = Object.values(gameState.players).map(p => p.id);
-            playerIds.sort(() => Math.random() - 0.5);
-            const monsterId = playerIds.length > 0 ? playerIds[0] : null;
-            const monsterSpriteIndex = Math.floor(Math.random() * giantSprites.length);
-            const levels = generateLevels();
-            const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
-            Object.values(gameState.players).forEach(p => {
-                const startRoom = levels.A.rooms[Math.floor(Math.random() * levels.A.rooms.length)];
-                p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
-                p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
-                p.level = 'A'; p.status = 'alive'; p.direction = 'right';
-                p.isMonster = p.id === monsterId;
-                if (p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
-            });
-            const initialState = { players: gameState.players, levels: levels, clues: clues };
-            gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
-        });
+startGameBtn.addEventListener('click', () => {
+    if (!gameChannel || !gameState.players[myPlayerId]?.isHost) return;
+
+    const playerIds = Object.values(gameState.players).map(p => p.id);
+    playerIds.sort(() => Math.random() - 0.5);
+    const monsterId = playerIds.length > 0 ? playerIds[0] : null;
+    const monsterSpriteIndex = Math.floor(Math.random() * giantSprites.length);
+    
+    // First, generate the levels
+    const levels = generateLevels(); 
+    
+    // Then, place clues on those levels
+    const clues = placeClues(levels, NUM_CLUES, MIN_CLUE_DISTANCE, gameState.players[myPlayerId]);
+
+    // Now that 'levels' exists, position the players
+    Object.values(gameState.players).forEach(p => {
+        // This line will no longer cause an error
+        const startRoom = levels.A.rooms[Math.floor(Math.random() * levels.A.rooms.length)];
+        p.x = (startRoom.x + Math.floor(startRoom.w / 2)) * TILE_SIZE;
+        p.y = (startRoom.y + Math.floor(startRoom.h / 2)) * TILE_SIZE;
+        p.level = 'A';
+        p.status = 'alive';
+        p.direction = 'right';
+        p.isMonster = p.id === monsterId;
+        if (p.isMonster) p.monsterSpriteIndex = monsterSpriteIndex;
+    });
+
+    const initialState = {
+        players: gameState.players,
+        levels: levels,
+        clues: clues
+    };
+    
+    gameChannel.send({ type: 'broadcast', event: 'init_game_state', payload: initialState });
+});
 
         // --- 2. GAME LOGIC ---
         async function joinLobby(username) {
