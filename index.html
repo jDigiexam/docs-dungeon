@@ -794,65 +794,68 @@ const sprites = {
         }
         
         // --- 6. GAME MECHANICS ---
-        function generateLevels() {
-            const levels = {};
-            const levelNames = ['A', 'B', 'C'];
-            const levelData = {
-                A: { rooms: [ {x:5, y:5, w:15, h:10}, {x:30, y:8, w:10, h:15}, {x:50, y:5, w:20, h:10}, {x:80, y:10, w:15, h:15}, {x:5, y:30, w:20, h:20}, {x:35, y:40, w:15, h:15}, {x:60, y:30, w:20, h:20}, {x:80, y:50, w:15, h:25} ] },
-                B: { rooms: [ {x:2, y:60, w:15, h:10}, {x:22, y:50, w:11, h:9}, {x:38, y:65, w:10, h:10}, {x:5, y:5, w:12, h:10}, {x:25, y:22, w:12, h:8}, {x:42, y:5, w:15, h:10}, {x:60, y:10, w:10, h:18}, {x:80, y:20, w:12, h:9} ] },
-                C: { rooms: [ {x:2, y:2, w:12, h:12}, {x:80, y:5, w:15, h:10}, {x:35, y:60, w:15, h:11}, {x:4, y:50, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10}, {x:65, y:30, w:15, h:8}, {x:80, y:45, w:12, h:9} ] }
-            };
+function generateLevels() {
+    const levels = {};
+    const levelNames = ['A', 'B', 'C'];
 
-            levelNames.forEach(levelId => {
-                const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
-                const { rooms } = levelData[levelId];
+    // --- FIXED DATA: All room coordinates are now within the 60x50 map boundaries ---
+    const levelData = {
+        A: { rooms: [ {x:5, y:5, w:10, h:8}, {x:20, y:8, w:10, h:10}, {x:40, y:5, w:15, h:10}, {x:45, y:20, w:10, h:10}, {x:5, y:25, w:15, h:15}, {x:30, y:35, w:15, h:10}, {x:25, y:20, w:10, h:10} ] },
+        B: { rooms: [ {x:2, y:40, w:15, h:8}, {x:22, y:30, w:11, h:9}, {x:38, y:40, w:10, h:8}, {x:5, y:5, w:12, h:10}, {x:25, y:18, w:12, h:8}, {x:42, y:5, w:15, h:10}, {x:45, y:25, w:10, h:10} ] },
+        C: { rooms: [ {x:2, y:2, w:12, h:12}, {x:40, y:5, w:15, h:10}, {x:35, y:35, w:15, h:11}, {x:4, y:30, w:10, h:10}, {x:22, y:22, w:12, h:12}, {x:40, y:20, w:12, h:10}, {x:48, y:30, w:10, h:8} ] }
+    };
 
-                rooms.forEach(room => {
-                    for (let ry = room.y; ry < room.y + room.h; ry++) {
-                        for (let rx = room.x; rx < room.x + room.w; rx++) {
-                            const floorVar = tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)];
-                            if (grid[ry]?.[rx]) grid[ry][rx] = { type: 'FLOOR', floorVariant: floorVar };
-                        }
-                    }
-                });
+    levelNames.forEach(levelId => {
+        const grid = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => ({ type: 'WALL' })));
+        const { rooms } = levelData[levelId];
 
-                for(let i = 0; i < rooms.length - 1; i++) {
-                    const roomA = rooms[i]; const roomB = rooms[i+1];
-                    const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
-                    const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
-                    
-                    const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
-                    for(let x = h_start; x <= h_end; x++) {
-                        for(let dy = -1; dy <= 1; dy++) {
-                             if (grid[start.y + dy]?.[x]) grid[start.y + dy][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
-                        }
-                    }
-                    const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
-                    for(let y = v_start; y <= v_end; y++) {
-                        for(let dx = -1; dx <= 1; dx++) {
-                            if (grid[y]?.[end.x + dx]) grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
-                        }
-                    }
+        rooms.forEach(room => {
+            for (let ry = room.y; ry < room.y + room.h; ry++) {
+                for (let rx = room.x; rx < room.x + room.w; rx++) {
+                    const floorVar = tileMap.FLOOR_VARS[Math.floor(Math.random() * tileMap.FLOOR_VARS.length)];
+                    if (grid[ry]?.[rx]) grid[ry][rx] = { type: 'FLOOR', floorVariant: floorVar };
                 }
-                levels[levelId] = { grid, rooms };
-            });
-
-            for (let i = 0; i < levelNames.length; i++) {
-                const levelIdA = levelNames[i];
-                const levelIdB = levelNames[(i + 1) % levelNames.length];
-                
-                const roomA = levels[levelIdA].rooms[Math.floor(Math.random() * levels[levelIdA].rooms.length)];
-                const xA = roomA.x + 1 + Math.floor(Math.random() * (roomA.w - 2));
-                const yA = roomA.y + 1 + Math.floor(Math.random() * (roomA.h - 2));
-                levels[levelIdA].grid[yA][xA] = { type: 'STAIRS', targetLevel: levelIdB };
-
-                const roomB = levels[levelIdB].rooms[Math.floor(Math.random() * levels[levelIdB].rooms.length)];
-                const xB = roomB.x + 1 + Math.floor(Math.random() * (roomB.w - 2));
-                const yB = roomB.y + 1 + Math.floor(Math.random() * (roomB.h - 2));
-                levels[levelIdB].grid[yB][xB] = { type: 'STAIRS', targetLevel: levelIdA };
             }
-            return levels;
+        });
+
+        for(let i = 0; i < rooms.length - 1; i++) {
+            const roomA = rooms[i]; const roomB = rooms[i+1];
+            const start = { x: Math.floor(roomA.x + roomA.w / 2), y: Math.floor(roomA.y + roomA.h / 2) };
+            const end = { x: Math.floor(roomB.x + roomB.w / 2), y: Math.floor(roomB.y + roomB.h / 2) };
+            
+            const h_start = Math.min(start.x, end.x); const h_end = Math.max(start.x, end.x);
+            for(let x = h_start; x <= h_end; x++) {
+                for(let dy = -1; dy <= 1; dy++) {
+                     if (grid[start.y + dy]?.[x]) grid[start.y + dy][x] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
+                }
+            }
+            const v_start = Math.min(start.y, end.y); const v_end = Math.max(start.y, end.y);
+            for(let y = v_start; y <= v_end; y++) {
+                for(let dx = -1; dx <= 1; dx++) {
+                    if (grid[y]?.[end.x + dx]) grid[y][end.x + dx] = { type: 'FLOOR', floorVariant: tileMap.FLOOR_VARS[0] };
+                }
+            }
         }
+        levels[levelId] = { grid, rooms };
+    });
+
+    // Place paired stairs between levels
+    for (let i = 0; i < levelNames.length; i++) {
+        const levelIdA = levelNames[i];
+        const levelIdB = levelNames[(i + 1) % levelNames.length];
+        
+        const roomA = levels[levelIdA].rooms[Math.floor(Math.random() * levels[levelIdA].rooms.length)];
+        const xA = roomA.x + 1 + Math.floor(Math.random() * (roomA.w - 2));
+        const yA = roomA.y + 1 + Math.floor(Math.random() * (roomA.h - 2));
+        levels[levelIdA].grid[yA][xA] = { type: 'STAIRS', targetLevel: levelIdB };
+
+        const roomB = levels[levelIdB].rooms[Math.floor(Math.random() * levels[levelIdB].rooms.length)];
+        const xB = roomB.x + 1 + Math.floor(Math.random() * (roomB.w - 2));
+        const yB = roomB.y + 1 + Math.floor(Math.random() * (roomB.h - 2));
+        levels[levelIdB].grid[yB][xB] = { type: 'STAIRS', targetLevel: levelIdA };
+    }
+    return levels;
+}
 
         function placeClues(levels, numClues, minDistance, playerStartPos) {
             let clues = [];
