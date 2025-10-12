@@ -605,93 +605,113 @@
              updatePlayerListUI();
         }
 
-        // --- 4. SUPABASE REALTIME ---
-        async function setupSupabaseChannels() {
-             const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
-             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
+// --- 4. SUPABASE REALTIME ---
+async function setupSupabaseChannels() {
+    const channelName = 'mystery-game-' + (new URLSearchParams(window.location.search).get('room') || 'default');
+    gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myPlayerId } }});
 
-            gameChannel
-                .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
-                    if (payload.id && gameState.players[payload.id]) {
-                        Object.assign(gameState.players[payload.id], payload);
-                    } else if (payload.id) {
-                        gameState.players[payload.id] = payload;
-                    }
-                    if(gameState.gamePhase === 'lobby') {
-                        checkHostAndReadyStatus();
-                    }
-                 })
-                .on('broadcast', { event: 'start_game' }, () => startGame())
-                .on('broadcast', { event: 'player_killed' }, ({ payload }) => {
-                    if (gameState.players[payload.playerId]) {
-                        gameState.players[payload.playerId].status = 'dead';
-                        if (payload.playerId === myPlayerId) {
-                            statusText.textContent = 'Status: Dead';
-                            gameOverText.textContent = 'You Have Died';
-                            gameOverSubtext.textContent = 'The monster got you...';
-                            gameOverScreen.style.display = 'flex';
-                        }
-                    }
-                })
-                .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
-                    gameOverText.textContent = 'Hunters Win!';
-                    gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
-                    gameOverScreen.style.display = 'flex';
-                    if (gameChannel) gameChannel.unsubscribe();
-                })
-                .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
-                .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
-                
-                // --- FIXED: Robust presence handling ---
-                .on('presence', { event: 'sync' }, () => {
-                    const presenceState = gameChannel.presenceState();
-                    const newPlayers = {};
+    gameChannel
+        .on('broadcast', { event: 'player_update' }, ({ payload }) => { 
+            if (payload.id && gameState.players[payload.id]) {
+                Object.assign(gameState.players[payload.id], payload);
+            } else if (payload.id) {
+                gameState.players[payload.id] = payload;
+            }
+            if(gameState.gamePhase === 'lobby') {
+                checkHostAndReadyStatus();
+            }
+         })
+        .on('broadcast', { event: 'start_game' }, () => startGame())
+        // ... (keep other broadcast handlers like player_killed, etc.)
+        .on('broadcast', { event: 'chat_message' }, ({ payload }) => displayChatMessage(payload))
+        .on('broadcast', { event: 'webrtc_signal' }, ({ payload }) => handleRtcSignal(payload))
+        
+        .on('presence', { event: 'sync' }, () => {
+            const presenceState = gameChannel.presenceState();
+            const newPlayers = {};
 
-                    // Rebuild the player list from the definitive presence state.
-                    for (const id in presenceState) {
-                        const presenceInfo = presenceState[id][0];
-                        newPlayers[presenceInfo.id] = {
-                            ...(gameState.players[presenceInfo.id] || {}), // Keep existing data like isReady
-                            ...presenceInfo // Overwrite with the latest from presence
-                        };
-                    }
+            // Rebuild the player list from the definitive presence state.
+            for (const id in presenceState) {
+                const presenceInfo = presenceState[id][0];
+                newPlayers[presenceInfo.id] = {
+                    ...(gameState.players[presenceInfo.id] || {}), // Keep existing data like isReady
+                    ...presenceInfo // Overwrite with the latest from presence
+                };
+            }
 
-                    // Ensure our own client's data is never overwritten by a stale version from the server.
-                    if (gameState.players[myPlayerId]) {
-                        newPlayers[myPlayerId] = gameState.players[myPlayerId];
-                    }
-                    
-                    gameState.players = newPlayers; // Atomically update the player list
+            // Ensure our own client's data is never overwritten by a stale version from the server.
+            if (gameState.players[myPlayerId]) {
+                newPlayers[myPlayerId] = gameState.players[myPlayerId];
+            }
+            
+            gameState.players = newPlayers; // Atomically update the player list
 
-                    checkHostAndReadyStatus();
+            // This is the correct place to check for a new host and update the UI
+            checkHostAndReadyStatus();
 
-                    // Connect to new peers
-                    for (const id in presenceState) {
-                        const pres = presenceState[id][0];
-                        if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
-                            createPeerConnection(pres.id, true);
-                        }
-                    }
-                })
-                .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                    leftPresences.forEach(p => {
-                        const playerId = p.id;
-                        delete gameState.players[playerId];
-                        if (peerConnections[playerId]) {
-                            peerConnections[playerId].close();
-                            delete peerConnections[playerId];
-                        }
-                        const videoElement = document.getElementById(`video-${playerId}`);
-                        if (videoElement) videoElement.parentElement.remove();
-                    });
-                    checkHostAndReadyStatus();
-                })
-                .subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        await gameChannel.track(gameState.players[myPlayerId]);
-                    }
-                });
+            // Connect to new peers
+            for (const id in presenceState) {
+                const pres = presenceState[id][0];
+                if (pres.id !== myPlayerId && !peerConnections[pres.id]) {
+                    createPeerConnection(pres.id, true);
+                }
+            }
+        })
+        
+        // --- FIXED: Simplified 'leave' handler ---
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+            // The 'leave' event's only job is to clean up resources for the leaving player.
+            // The 'sync' event will handle updating the game state and re-assigning the host.
+            leftPresences.forEach(p => {
+                const playerId = p.id;
+                if (peerConnections[playerId]) {
+                    peerConnections[playerId].close();
+                    delete peerConnections[playerId];
+                }
+                const videoContainer = document.getElementById(`video-container-${playerId}`);
+                if (videoContainer) videoContainer.remove();
+            });
+        })
+
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await gameChannel.track(gameState.players[myPlayerId]);
+            }
+        });
+}
+
+// --- FIXED: More robust checkHostAndReadyStatus function ---
+function checkHostAndReadyStatus() {
+    if (!gameChannel) return;
+
+    const presenceState = gameChannel.presenceState();
+    const presences = Object.keys(presenceState).sort();
+
+    // First, clear the host status from all players locally
+    Object.values(gameState.players).forEach(p => p.isHost = false);
+
+    // Then, assign the host status to the first player in the sorted presence list
+    if (presences.length > 0) {
+        // Safely get the new host's ID
+        const newHostId = presenceState[presences[0]]?.[0]?.id;
+        
+        if (newHostId && gameState.players[newHostId]) {
+            gameState.players[newHostId].isHost = true;
         }
+    }
+
+    const me = gameState.players[myPlayerId];
+    if (me && me.isHost) {
+        startGameBtn.style.display = 'block';
+        // Only enable the start button if there's more than one player and everyone is ready
+        const allReady = Object.values(gameState.players).length > 1 && Object.values(gameState.players).every(p => p.isReady);
+        startGameBtn.disabled = !allReady;
+    } else {
+        startGameBtn.style.display = 'none';
+    }
+    
+    updatePlayerListUI();
+}
         
         function broadcastPlayerState() { if (gameChannel && gameState.players[myPlayerId]) gameChannel.send({ type: 'broadcast', event: 'player_update', payload: gameState.players[myPlayerId] }); }
         function broadcastPlayerKilled(playerId) { if (gameChannel) gameChannel.send({ type: 'broadcast', event: 'player_killed', payload: { playerId } }); }
