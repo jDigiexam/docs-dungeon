@@ -951,15 +951,24 @@
         async function startLocalMedia() { 
             const lobbyMusic = document.getElementById('lobby-music');
             try { 
-                localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+                // --- MODIFIED LINE ---
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                
                 createVideoElement(myPlayerId, localStream, "YOU (Me)", true);
                 updateVideoGridLayout();
-                isMicOn=false;isCamOn=false;
-                localStream.getAudioTracks().forEach(t=>t.enabled=isMicOn);
-                localStream.getVideoTracks().forEach(t=>t.enabled=isCamOn);
+                isMicOn = false; isCamOn = false;
+                localStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
+                localStream.getVideoTracks().forEach(t => t.enabled = isCamOn);
                 updateMediaButtons(); 
-            } catch(e){
-                console.error("Error accessing media devices.",e);
+            } catch(e) {
+                console.error("Error accessing media devices.", e);
             } finally {
                 if (lobbyMusic && lobbyMusic.paused) {
                     lobbyMusic.play().catch(err => {});
