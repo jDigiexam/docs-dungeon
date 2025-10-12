@@ -641,10 +641,15 @@
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => {
-                    if (!payload || !payload.id || !gameState.players[payload.id]) return;
-                    if (gameState.gamePhase === 'lobby') { Object.assign(gameState.players[payload.id], payload); checkHostAndReadyStatus(); } 
-                    else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) Object.assign(gameState.players[payload.id], payload);
-                })
+    if (!payload || !payload.id || !gameState.players[payload.id]) return;
+    if (gameState.gamePhase === 'lobby') { 
+        Object.assign(gameState.players[payload.id], payload); 
+        checkHostAndReadyStatus(); 
+    } 
+    else if (gameState.gamePhase === 'playing' && payload.id !== myPlayerId) {
+        Object.assign(gameState.players[payload.id], payload);
+    }
+})
                 .on('broadcast', { event: 'npcs_update' }, ({ payload }) => {
                     if (gameState.gamePhase === 'playing' && !gameState.players[myPlayerId]?.isHost) {
                         gameState.npcs = payload;
