@@ -82,6 +82,7 @@
         <div id="game-over-screen" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 hidden">
             <h2 id="game-over-text" class="text-5xl font-bold text-white mb-4">Game Over</h2>
             <p id="game-over-subtext" class="text-xl text-gray-300"></p>
+            <button id="play-again-btn" class="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden">Play Again?</button>
         </div>
 
         <div id="game-screen" class="relative w-full h-full hidden">
@@ -133,6 +134,7 @@
         const gameOverSubtext = document.getElementById('game-over-subtext');
         const lobbyPreviewCanvas = document.getElementById('lobby-preview-canvas');
         const characterGrid = document.getElementById('character-grid');
+        const playAgainBtn = document.getElementById('play-again-btn');
 
         // Game State
         const gameState = { players: {}, levels: {}, clues: [], npcs: [], gamePhase: 'loading' };
@@ -425,6 +427,10 @@
             }
 
             if (gameState.gamePhase !== 'playing') {
+                // Still draw one last time if the game is over to show tombstones, etc.
+                if(gameState.gamePhase === 'gameover') {
+                    drawGame();
+                }
                 requestAnimationFrame(gameLoop);
                 return;
             }
@@ -461,8 +467,6 @@
         function drawGame() {
             const myPlayer = gameState.players[myPlayerId];
             if (!ctx || !myPlayer || assetsLoadedCount < Object.keys(assets).length) return;
-            
-            if (gameState.gamePhase !== 'playing' && myPlayer.status === 'alive') return;
             
             ctx.save();
             ctx.imageSmoothingEnabled = false; 
@@ -718,12 +722,26 @@
                         gameOverText.textContent = payload.title || 'Game Over';
                         gameOverSubtext.textContent = payload.message;
                         gameOverScreen.style.display = 'flex';
+                        if (gameState.players[myPlayerId]?.isHost) {
+                            playAgainBtn.style.display = 'block';
+                        }
                     }
                 })
                 .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
-                    gameOverText.textContent = 'Hunters Win!'; gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
-                    gameOverScreen.style.display = 'flex';
-                    if (gameChannel) gameChannel.unsubscribe();
+                    if (gameState.gamePhase === 'playing') {
+                        gameState.gamePhase = 'gameover';
+                        document.getElementById('dungeon-music').pause();
+                        gameOverText.textContent = 'Hunters Win!';
+                        gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
+                        gameOverScreen.style.display = 'flex';
+                        if (gameState.players[myPlayerId]?.isHost) {
+                            playAgainBtn.style.display = 'block';
+                        }
+                        if (gameChannel) gameChannel.unsubscribe();
+                    }
+                })
+                .on('broadcast', { event: 'reset_game' }, () => {
+                    window.location.reload();
                 })
                 .on('broadcast', { event: 'chat_message' }, ({ payload }) => {
                     if (payload.senderId === myPlayerId) return;
@@ -1154,6 +1172,12 @@
             chatMessages.appendChild(msgEl); 
             chatBox.scrollTop = chatBox.scrollHeight; 
         }
+
+        playAgainBtn.addEventListener('click', () => {
+            if (gameChannel && gameState.players[myPlayerId]?.isHost) {
+                gameChannel.send({ type: 'broadcast', event: 'reset_game', payload: {} });
+            }
+        });
     </script>
 </body>
 </html>
