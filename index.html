@@ -79,11 +79,13 @@
             </div>
         </div>
         
-        <div id="game-over-screen" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 hidden">
-            <h2 id="game-over-text" class="text-5xl font-bold text-white mb-4">Game Over</h2>
-            <p id="game-over-subtext" class="text-xl text-gray-300"></p>
-            <button id="play-again-btn" class="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden">Play Again?</button>
-        </div>
+<div id="game-over-screen" class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 hidden">
+    <h2 id="game-over-text" class="text-5xl font-bold text-white mb-4">Game Over</h2>
+    <p id="game-over-subtext" class="text-xl text-gray-300"></p>
+    <button id="play-again-btn" class="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded text-xl hidden">Play Again?</button>
+    <p id="waiting-for-host-text" class="mt-6 text-lg text-gray-400 hidden">Waiting for the host to start a new game...</p>
+</div>
+
 
         <div id="game-screen" class="relative w-full h-full hidden">
             <canvas id="game-canvas" class="w-full h-full"></canvas>
@@ -135,6 +137,7 @@
         const lobbyPreviewCanvas = document.getElementById('lobby-preview-canvas');
         const characterGrid = document.getElementById('character-grid');
         const playAgainBtn = document.getElementById('play-again-btn');
+        const waitingForHostText = document.getElementById('waiting-for-host-text');
 
         // Game State
         const gameState = { players: {}, levels: {}, clues: [], npcs: [], gamePhase: 'loading' };
@@ -715,31 +718,36 @@
                         }
                     }
                 })
-                .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
-                    if (gameState.gamePhase === 'playing') {
-                        gameState.gamePhase = 'gameover';
-                        document.getElementById('dungeon-music').pause();
-                        gameOverText.textContent = payload.title || 'Game Over';
-                        gameOverSubtext.textContent = payload.message;
-                        gameOverScreen.style.display = 'flex';
-                        if (gameState.players[myPlayerId]?.isHost) {
-                            playAgainBtn.style.display = 'block';
-                        }
-                    }
-                })
-                .on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
-                    if (gameState.gamePhase === 'playing') {
-                        gameState.gamePhase = 'gameover';
-                        document.getElementById('dungeon-music').pause();
-                        gameOverText.textContent = 'Hunters Win!';
-                        gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
-                        gameOverScreen.style.display = 'flex';
-                        if (gameState.players[myPlayerId]?.isHost) {
-                            playAgainBtn.style.display = 'block';
-                        }
-                        if (gameChannel) gameChannel.unsubscribe();
-                    }
-                })
+              .on('broadcast', { event: 'monsters_win' }, ({ payload }) => {
+    if (gameState.gamePhase === 'playing') {
+        gameState.gamePhase = 'gameover';
+        document.getElementById('dungeon-music').pause();
+        gameOverText.textContent = payload.title || 'Game Over';
+        gameOverSubtext.textContent = payload.message;
+        gameOverScreen.style.display = 'flex';
+        
+        if (gameState.players[myPlayerId]?.isHost) {
+            playAgainBtn.style.display = 'block';
+        } else {
+            waitingForHostText.style.display = 'block';
+        }
+    }
+})
+.on('broadcast', { event: 'monster_killed' }, ({ payload }) => {
+    if (gameState.gamePhase === 'playing') {
+        gameState.gamePhase = 'gameover';
+        document.getElementById('dungeon-music').pause();
+        gameOverText.textContent = 'Hunters Win!';
+        gameOverSubtext.textContent = `${payload.killerName} defeated the monster!`;
+        gameOverScreen.style.display = 'flex';
+
+            if (gameState.players[myPlayerId]?.isHost) {
+            playAgainBtn.style.display = 'block';
+        } else {
+            waitingForHostText.style.display = 'block';
+        }
+    }
+})
                 .on('broadcast', { event: 'reset_game' }, () => {
                     window.location.reload();
                 })
