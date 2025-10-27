@@ -438,7 +438,6 @@
 
             if (gameState.players[myPlayerId]?.isHost) {
                 updateNpcs(deltaTime);
-                // BROADCAST MOVED to setInterval to prevent rate-limiting
             }
 
             const myPlayer = gameState.players[myPlayerId];
@@ -481,11 +480,14 @@
             drawLevel(myPlayer.level, cameraX, cameraY);
             drawClues(myPlayer.level);
             drawNpcs();
+            
+            // FIX 3: Only draw players who are on the same level as you
             Object.values(gameState.players).forEach(player => {
-                if (player.status === 'alive') {
+                if (player.status === 'alive' && player.level === myPlayer.level) {
                     drawPlayer(player);
                 }
             });
+
             drawTombstones();
             ctx.restore();
             drawFogOfWar();
@@ -537,6 +539,10 @@
             let spriteInfo, spritesheet, sWidth, sHeight, dWidth, dHeight;
             if (player.isMonster) {
                 const monster = giantSprites[player.monsterSpriteIndex];
+                if (!monster) {
+                    console.error("Invalid monsterSpriteIndex for player:", player);
+                    return; 
+                }
                 spriteInfo = {sx: monster.sx, sy: monster.sy};
                 spritesheet = assets[monster.sheet];
                 sWidth = monster.sWidth;
@@ -763,7 +769,10 @@
                     checkHostAndReadyStatus();
                     for (const id in presenceState) {
                         const pres = presenceState[id][0];
-                        if (pres.id !== myPlayerId && !peerConnections[pres.id]) createPeerConnection(pres.id, true);
+                        // FIX 2: Only the client with the "smaller" ID initiates the WebRTC offer to prevent a race condition.
+                        if (pres.id !== myPlayerId && !peerConnections[pres.id] && myPlayerId < pres.id) {
+                            createPeerConnection(pres.id, true);
+                        }
                     }
                 })
                 .on('presence', { event: 'leave' }, ({ leftPresences }) => {
@@ -777,7 +786,6 @@
                 })
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') await gameChannel.track(gameState.players[myPlayerId]); });
 
-            // --- *** FIX IMPLEMENTED HERE *** ---
             // This loop sends updates at a fixed rate (20 times/sec) to avoid overwhelming the server.
             setInterval(() => {
                 if (gameState.gamePhase === 'playing' && gameChannel && gameState.players[myPlayerId]) {
@@ -861,8 +869,9 @@
                     else if (!isColliding(player.x, targetY, currentLevel.grid)) targetX = player.x;
                     else { targetX = player.x; targetY = player.y; }
                 }
+                const moved = player.x !== targetX || player.y !== targetY;
                 player.x = targetX; player.y = targetY;
-                // BROADCAST MOVED to setInterval to prevent rate-limiting
+                // FIX 1: This broadcast call is now removed. All updates are handled by the setInterval loop.
             }
         }
         
@@ -1063,7 +1072,7 @@
                     }
                     if (foundExit) break;
                 }
-                broadcastPlayerState();
+                // No immediate broadcast needed, will be sent by the setInterval loop
             }
         }
         
