@@ -655,7 +655,9 @@
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => {
+                    // Ignore updates about our own player to prevent visual glitches
                     if (!payload || !payload.id || !gameState.players[payload.id] || payload.id === myPlayerId) return;
+                    
                     if (gameState.gamePhase === 'lobby') { 
                         Object.assign(gameState.players[payload.id], payload); 
                         checkHostAndReadyStatus(); 
@@ -789,16 +791,9 @@
             setInterval(() => {
                 if (gameChannel && gameState.players[myPlayerId]) {
                     if (gameState.gamePhase === 'playing') {
-                        // Broadcast this player's state
                         broadcastPlayerState();
-
-                        // If this player is the host, also broadcast the NPC states
                         if (gameState.players[myPlayerId].isHost) {
-                            gameChannel.send({
-                                type: 'broadcast',
-                                event: 'npcs_update',
-                                payload: gameState.npcs
-                            });
+                            gameChannel.send({ type: 'broadcast', event: 'npcs_update', payload: gameState.npcs });
                         }
                     }
                 }
@@ -1024,26 +1019,34 @@
             gameState.clues.forEach(c => {if(c.level===p.level&&c.x===px&&c.y===py&&c.collectedByTeams.length===0){broadcastClueCollected(c.id, p.id);}}); 
         }
 
-        function checkPlayerCollisions() { 
+        function checkPlayerCollisions() {
             const me = gameState.players[myPlayerId];
-            if(!me || me.status !== 'alive') return;
-            for(const oId in gameState.players){
-                if(oId === myPlayerId) continue;
-                const o = gameState.players[oId];
-                if(o.status !== 'alive' || o.level !== me.level) continue;
-                if(Math.sqrt((me.x - o.x)**2 + (me.y - o.y)**2) < TILE_SIZE * 0.7){
-                    if(me.hasWeapon && o.isMonster) {
-                        // FIX 1: Instead of broadcasting, just change the state. The loop will send it.
-                        o.status = 'dead'; 
+            if (!me || me.status !== 'alive') return;
+
+            for (const oId in gameState.players) {
+                if (oId === myPlayerId) continue;
+                const otherPlayer = gameState.players[oId];
+
+                // Only check for collisions against players who are on the same level.
+                if (otherPlayer.level !== me.level) continue;
+
+                const distance = Math.sqrt((me.x - otherPlayer.x)**2 + (me.y - otherPlayer.y)**2);
+
+                if (distance < TILE_SIZE * 0.7) {
+                    // Case 1: Hunter kills the monster. Only act if the monster is alive.
+                    if (me.hasWeapon && otherPlayer.isMonster && otherPlayer.status === 'alive') {
                         broadcastMonsterKilled(me.username);
                     }
-                    if(me.isMonster && !o.isMonster) {
-                        // FIX 1: Just change the state locally. The loop will broadcast it.
-                        o.status = 'dead'; 
+                    
+                    // Case 2: Monster kills a hunter. Only act if the hunter is alive.
+                    if (me.isMonster && !otherPlayer.isMonster && otherPlayer.status === 'alive') {
+                        // By checking status, we ensure the broadcast happens only ONCE.
+                        broadcastPlayerKilled(oId);
                     }
                 }
             }
         }
+
 
         function checkStairsUse() {
             const player = gameState.players[myPlayerId];
@@ -1078,7 +1081,6 @@
                     }
                     if (foundExit) break;
                 }
-                // FIX 1: Removed broadcastPlayerState(). The update will be sent by the main setInterval loop.
             }
         }
         
@@ -1092,7 +1094,6 @@
 
             if (collectedCount >= NUM_CLUES && !me.hasWeapon) {
                 me.hasWeapon = true;
-                // This is a one-time event, so an immediate broadcast is okay here.
                 broadcastPlayerState();
             }
         }
