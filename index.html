@@ -145,6 +145,7 @@
         let gameChannel = null;
         let selectedSpriteKey = 'red_wizard';
         let lastTime = 0;
+        let lastBroadcastedState = ''; // Variable to track the last state we sent
         
         // Game Constants
         const TILE_SIZE = 128;
@@ -655,7 +656,6 @@
             gameChannel = supabaseClient.channel(channelName, { config: { broadcast: { self: true }, presence: { key: myPlayerId } }});
             gameChannel
                 .on('broadcast', { event: 'player_update' }, ({ payload }) => {
-                    // Ignore updates about our own player to prevent visual glitches
                     if (!payload || !payload.id || !gameState.players[payload.id] || payload.id === myPlayerId) return;
                     
                     if (gameState.gamePhase === 'lobby') { 
@@ -787,17 +787,31 @@
                 })
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') await gameChannel.track(gameState.players[myPlayerId]); });
 
-            // This loop sends updates at a fixed rate (20 times/sec) to avoid overwhelming the server.
+            // This loop sends updates at a fixed rate (10 times/sec) to avoid overwhelming the server.
             setInterval(() => {
                 if (gameChannel && gameState.players[myPlayerId]) {
                     if (gameState.gamePhase === 'playing') {
-                        broadcastPlayerState();
+                        // --- FIX IMPLEMENTED HERE ---
+                        const currentState = JSON.stringify(gameState.players[myPlayerId]);
+                        
+                        // Only broadcast if the player's state has actually changed.
+                        if (currentState !== lastBroadcastedState) {
+                            broadcastPlayerState();
+                            lastBroadcastedState = currentState; // Update the last known state
+                        }
+
                         if (gameState.players[myPlayerId].isHost) {
-                            gameChannel.send({ type: 'broadcast', event: 'npcs_update', payload: gameState.npcs });
+                            // This can still be spammy, but let's keep it for now.
+                            // A further optimization would be to only send if npcs have moved.
+                            gameChannel.send({
+                                type: 'broadcast',
+                                event: 'npcs_update',
+                                payload: gameState.npcs
+                            });
                         }
                     }
                 }
-            }, 50); // 1000ms / 50ms = 20 updates per second
+            }, 100); // Check 10 times per second
         }
 
         function checkHostAndReadyStatus() {
@@ -1027,26 +1041,21 @@
                 if (oId === myPlayerId) continue;
                 const otherPlayer = gameState.players[oId];
 
-                // Only check for collisions against players who are on the same level.
-                if (otherPlayer.level !== me.level) continue;
+                if (otherPlayer.status !== 'alive' || otherPlayer.level !== me.level) continue;
 
                 const distance = Math.sqrt((me.x - otherPlayer.x)**2 + (me.y - otherPlayer.y)**2);
 
                 if (distance < TILE_SIZE * 0.7) {
-                    // Case 1: Hunter kills the monster. Only act if the monster is alive.
-                    if (me.hasWeapon && otherPlayer.isMonster && otherPlayer.status === 'alive') {
+                    if (me.hasWeapon && otherPlayer.isMonster) {
                         broadcastMonsterKilled(me.username);
                     }
                     
-                    // Case 2: Monster kills a hunter. Only act if the hunter is alive.
                     if (me.isMonster && !otherPlayer.isMonster && otherPlayer.status === 'alive') {
-                        // By checking status, we ensure the broadcast happens only ONCE.
                         broadcastPlayerKilled(oId);
                     }
                 }
             }
         }
-
 
         function checkStairsUse() {
             const player = gameState.players[myPlayerId];
