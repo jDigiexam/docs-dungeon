@@ -251,7 +251,7 @@
             const spriteInfo = sprites[selectedSpriteKey];
             previewCtx.clearRect(0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
             if (spriteInfo && assets.chars.complete) {
-                 previewCtx.drawImage(assets.chars, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
+                previewCtx.drawImage(assets.chars, spriteInfo.sx, spriteInfo.sy, SPRITE_SIZE, SPRITE_SIZE, 0, 0, lobbyPreviewCanvas.width, lobbyPreviewCanvas.height);
             }
             document.querySelectorAll('.char-option').forEach(canvas => {
                 canvas.classList.toggle('border-indigo-400', canvas.dataset.spriteKey === selectedSpriteKey);
@@ -429,7 +429,7 @@
             }
 
             if (gameState.gamePhase !== 'playing') {
-                 if(gameState.gamePhase === 'gameover') {
+                if(gameState.gamePhase === 'gameover') {
                     drawGame();
                 }
                 requestAnimationFrame(gameLoop);
@@ -438,7 +438,7 @@
 
             if (gameState.players[myPlayerId]?.isHost) {
                 updateNpcs(deltaTime);
-                if(gameChannel) gameChannel.send({type: 'broadcast', event: 'npcs_update', payload: gameState.npcs});
+                // BROADCAST MOVED to setInterval to prevent rate-limiting
             }
 
             const myPlayer = gameState.players[myPlayerId];
@@ -544,12 +544,12 @@
                 dWidth = TILE_SIZE * 1.5;
                 dHeight = TILE_SIZE * 1.5;
             } else {
-                 spriteInfo = sprites[player.spriteStyle];
-                 spritesheet = assets.chars;
-                 sWidth = SPRITE_SIZE;
-                 sHeight = SPRITE_SIZE;
-                 dWidth = TILE_SIZE;
-                 dHeight = TILE_SIZE;
+                spriteInfo = sprites[player.spriteStyle];
+                spritesheet = assets.chars;
+                sWidth = SPRITE_SIZE;
+                sHeight = SPRITE_SIZE;
+                dWidth = TILE_SIZE;
+                dHeight = TILE_SIZE;
             }
             if (!spriteInfo || !spritesheet) { console.warn("Could not find sprite for style:", player.spriteStyle); return; };
             ctx.save();
@@ -557,7 +557,7 @@
             if (player.direction === 'left') { ctx.scale(-1, 1); }
             ctx.drawImage(spritesheet, spriteInfo.sx, spriteInfo.sy, sWidth, sHeight, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
             if (player.hasWeapon) {
-                 ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, dWidth / 4, -dHeight / 4, TILE_SIZE, TILE_SIZE);
+                ctx.drawImage(assets.items, weaponSprite.sx, weaponSprite.sy, SPRITE_SIZE, SPRITE_SIZE, dWidth / 4, -dHeight / 4, TILE_SIZE, TILE_SIZE);
             }
             ctx.restore();
         }
@@ -776,6 +776,24 @@
                     updateVideoGridLayout();
                 })
                 .subscribe(async (status) => { if (status === 'SUBSCRIBED') await gameChannel.track(gameState.players[myPlayerId]); });
+
+            // --- *** FIX IMPLEMENTED HERE *** ---
+            // This loop sends updates at a fixed rate (20 times/sec) to avoid overwhelming the server.
+            setInterval(() => {
+                if (gameState.gamePhase === 'playing' && gameChannel && gameState.players[myPlayerId]) {
+                    // Broadcast this player's state
+                    broadcastPlayerState();
+
+                    // If this player is the host, also broadcast the NPC states
+                    if (gameState.players[myPlayerId].isHost) {
+                        gameChannel.send({
+                            type: 'broadcast',
+                            event: 'npcs_update',
+                            payload: gameState.npcs
+                        });
+                    }
+                }
+            }, 50); // 1000ms / 50ms = 20 updates per second
         }
 
         function checkHostAndReadyStatus() {
@@ -843,9 +861,8 @@
                     else if (!isColliding(player.x, targetY, currentLevel.grid)) targetX = player.x;
                     else { targetX = player.x; targetY = player.y; }
                 }
-                const moved = player.x !== targetX || player.y !== targetY;
                 player.x = targetX; player.y = targetY;
-                if(moved) broadcastPlayerState();
+                // BROADCAST MOVED to setInterval to prevent rate-limiting
             }
         }
         
